@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { RewardsProvider, useRewards } from '@/context/RewardsContext';
@@ -11,9 +11,11 @@ import ComparisonView from '@/components/results/ComparisonView';
 import HistoryView from '@/components/history/HistoryView';
 import SessionTransferBanner from '@/components/auth/SessionTransferBanner';
 import EmailVerificationModal from '@/components/auth/EmailVerificationModal';
+import LoginModal, { LoginModalMode } from '@/components/auth/LoginModal';
 import DailyBoostCelebration from '@/components/shared/DailyBoostCelebration';
 import StripePurchase from '@/components/stripe/StripePurchase';
 import Toast from '@/components/common/Toast';
+import { captureReferralFromURL } from '@/utils/referralTracking';
 import './App.css';
 
 function AppContent() {
@@ -22,6 +24,37 @@ function AppContent() {
   const [showEmailVerification, setShowEmailVerification] = useState(false);
   const [showDailyBoost, setShowDailyBoost] = useState(false);
   const [showStripePurchase, setShowStripePurchase] = useState(false);
+
+  // Login/Signup modal state
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginModalMode, setLoginModalMode] = useState<LoginModalMode>('signup');
+
+  const showSignupModal = useCallback((mode: LoginModalMode = 'signup') => {
+    setLoginModalMode(mode);
+    setShowLoginModal(true);
+  }, []);
+
+  const hideLoginModal = useCallback(() => {
+    setShowLoginModal(false);
+  }, []);
+
+  // Capture referral parameter from URL on initial load
+  useEffect(() => {
+    captureReferralFromURL();
+  }, []);
+
+  // Auto-open signup modal when arriving with a referral code and not logged in
+  const referralAutoOpenDone = useRef(false);
+  useEffect(() => {
+    if (authState.isLoading || authState.isAuthenticated) return;
+    if (referralAutoOpenDone.current) return;
+    const url = new URL(window.location.href);
+    const hasReferralCode = url.searchParams.get('code') || url.searchParams.get('referral');
+    if (hasReferralCode) {
+      referralAutoOpenDone.current = true;
+      showSignupModal('signup');
+    }
+  }, [authState.isLoading, authState.isAuthenticated, showSignupModal]);
 
   // Find the Daily Boost reward (id "2")
   const dailyBoostReward = rewards.find(r => r.id === '2');
@@ -44,11 +77,15 @@ function AppContent() {
 
   return (
     <div className="grain-overlay flex h-dvh flex-col overflow-hidden bg-surface-950 text-white">
-      <Header onPurchaseClick={
-        authState.isAuthenticated && authState.authMode === 'frontend'
-          ? () => setShowStripePurchase(true)
-          : undefined
-      } />
+      <Header
+        onPurchaseClick={
+          authState.isAuthenticated && authState.authMode === 'frontend'
+            ? () => setShowStripePurchase(true)
+            : undefined
+        }
+        onLoginClick={() => showSignupModal('login')}
+        onSignupClick={() => showSignupModal('signup')}
+      />
       {authState.sessionTransferred && authState.error && (
         <SessionTransferBanner message={authState.error} />
       )}
@@ -63,6 +100,13 @@ function AppContent() {
       <EmailVerificationModal
         isOpen={showEmailVerification}
         onClose={() => setShowEmailVerification(false)}
+      />
+      <LoginModal
+        open={showLoginModal}
+        mode={loginModalMode}
+        onModeChange={setLoginModalMode}
+        onClose={hideLoginModal}
+        onSignupComplete={hideLoginModal}
       />
       <DailyBoostCelebration
         isVisible={showDailyBoost}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import LoginModal from '@/components/auth/LoginModal';
+import LoginModal, { LoginModalMode } from '@/components/auth/LoginModal';
 import Button from '@/components/common/Button';
 
 interface DemoBannerProps {
@@ -10,6 +10,7 @@ interface DemoBannerProps {
 function DemoBanner({ generationsRemaining }: DemoBannerProps) {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [loginMode, setLoginMode] = useState<LoginModalMode>('login');
 
   const isLimitReached = generationsRemaining <= 0;
 
@@ -69,7 +70,13 @@ function DemoBanner({ generationsRemaining }: DemoBannerProps) {
         )}
       </AnimatePresence>
 
-      <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />
+      <LoginModal
+        open={showLogin}
+        mode={loginMode}
+        onModeChange={setLoginMode}
+        onClose={() => setShowLogin(false)}
+        onSignupComplete={() => setShowLogin(false)}
+      />
     </>
   );
 }
