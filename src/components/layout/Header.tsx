@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import Button from '@/components/common/Button';
 import UserMenu from '@/components/layout/UserMenu';
+import ReferralSharePopup from '@/components/shared/ReferralSharePopup';
 
 interface HeaderProps {
   onPurchaseClick?: () => void;
@@ -11,6 +13,7 @@ interface HeaderProps {
 
 function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
   const { authState, currentView, setCurrentView, resetPhoto } = useApp();
+  const [showReferral, setShowReferral] = useState(false);
 
   return (
     <motion.header
@@ -49,6 +52,15 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
             </motion.button>
           )}
 
+          {authState.isAuthenticated && (
+            <button
+              onClick={() => setShowReferral(true)}
+              className="rounded-full bg-gradient-to-r from-primary-400 to-primary-500 px-3 py-1 text-xs font-semibold text-surface-950 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-primary-400/30"
+            >
+              Share & Earn
+            </button>
+          )}
+
           {authState.isAuthenticated ? (
             <UserMenu onPurchaseClick={onPurchaseClick} />
           ) : (
@@ -71,6 +83,7 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
           )}
         </nav>
       </div>
+      <ReferralSharePopup isOpen={showReferral} onClose={() => setShowReferral(false)} />
     </motion.header>
   );
 }
