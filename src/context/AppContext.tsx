@@ -83,6 +83,12 @@ interface AppContextValue {
 
   // Actions
   generateMakeover: (transformation: Transformation) => Promise<void>;
+  generateFromPrompt: (params: {
+    prompt: string;
+    intensity?: number;
+    negativePrompt?: string;
+    useStackedInput?: boolean;
+  }) => Promise<{ resultUrl: string; projectId: string }>;
   cancelGeneration: () => void;
   resetPhoto: () => void;
   logout: () => Promise<void>;
@@ -994,6 +1000,57 @@ export function AppProvider({ children }: AppProviderProps) {
     ],
   );
 
+  /**
+   * Simplified generation interface for chat tools.
+   * Constructs a synthetic Transformation and delegates to generateMakeover.
+   */
+  const generateFromPrompt = useCallback(
+    async (params: {
+      prompt: string;
+      intensity?: number;
+      negativePrompt?: string;
+      useStackedInput?: boolean;
+    }): Promise<{ resultUrl: string; projectId: string }> => {
+      // Temporarily switch edit stack mode if needed
+      const prevMode = editStack.mode;
+      if (params.useStackedInput) {
+        editStack.setMode('stacked');
+      } else {
+        editStack.setMode('original');
+      }
+
+      const syntheticTransformation: Transformation = {
+        id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: params.prompt.slice(0, 30) + (params.prompt.length > 30 ? '...' : ''),
+        category: 'ai-generated' as TransformationCategory,
+        subcategory: 'chat',
+        prompt: params.prompt,
+        icon: '\uD83E\uDD16',
+        intensity: params.intensity,
+        negativePrompt: params.negativePrompt,
+      };
+
+      await generateMakeover(syntheticTransformation);
+
+      // Restore edit stack mode
+      if (prevMode !== editStack.mode) {
+        editStack.setMode(prevMode);
+      }
+
+      // Extract result from current state
+      // The result is set by generateMakeover via setCurrentResult
+      const stack = editStack.steps;
+      const latestStep = stack[stack.length - 1];
+
+      return {
+        resultUrl: latestStep?.resultImageUrl || '',
+        projectId: '',
+      };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editStack methods are stable callbacks
+    [generateMakeover],
+  );
+
   // -----------------------------------------------------------------------
   // Context value
   // -----------------------------------------------------------------------
@@ -1026,6 +1083,7 @@ export function AppProvider({ children }: AppProviderProps) {
         sogniClient,
         initializeSogniClient,
         generateMakeover,
+        generateFromPrompt,
         cancelGeneration,
         resetPhoto,
         logout,
