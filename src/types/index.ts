@@ -8,7 +8,8 @@ export type TransformationCategory =
   | 'expression'
   | 'body'
   | 'age-fantasy'
-  | 'lighting';
+  | 'lighting'
+  | 'ai-generated';
 
 export interface TransformationSubcategory {
   id: string;
