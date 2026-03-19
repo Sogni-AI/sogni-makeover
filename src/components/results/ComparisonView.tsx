@@ -87,6 +87,11 @@ function ComparisonView() {
               : originalImageUrl
           }
           afterImage={resultImageUrl}
+          originalImage={
+            editStack.mode === 'stacked' && editStack.currentIndex > 0
+              ? originalImageUrl
+              : undefined
+          }
           className="max-h-full"
         />
       </motion.div>

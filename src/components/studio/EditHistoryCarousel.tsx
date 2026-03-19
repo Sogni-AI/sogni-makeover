@@ -270,6 +270,11 @@ function EditHistoryCarousel() {
                 <BeforeAfterSlider
                   beforeImage={beforeImage!}
                   afterImage={steps[currentIndex].resultImageUrl}
+                  originalImage={
+                    currentIndex > 0 && mode === 'stacked'
+                      ? originalImageUrl
+                      : undefined
+                  }
                   className="max-h-full"
                 />
               ) : (

@@ -7,6 +7,7 @@ interface FullscreenComparisonProps {
   onClose: () => void;
   beforeImage: string;
   afterImage: string | null;
+  originalImage?: string;
   transformationName?: string;
   onDownload: () => void;
   onShare: () => void;

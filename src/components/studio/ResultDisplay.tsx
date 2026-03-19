@@ -46,6 +46,11 @@ function ResultDisplay({ resultUrl }: ResultDisplayProps) {
                   : originalImageUrl
               }
               afterImage={resultUrl}
+              originalImage={
+                editStack.mode === 'stacked' && editStack.currentIndex > 0
+                  ? originalImageUrl
+                  : undefined
+              }
               className="max-h-full"
             />
           </motion.div>

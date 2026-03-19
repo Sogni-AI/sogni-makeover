@@ -3,6 +3,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 interface BeforeAfterSliderProps {
   beforeImage: string;
   afterImage: string;
+  /** When provided and different from beforeImage, shows a toggle on the Before label */
+  originalImage?: string;
   className?: string;
 }
 
@@ -38,19 +40,24 @@ function resizeToMatch(
   return canvas.toDataURL('image/jpeg', 0.92);
 }
 
-function BeforeAfterSlider({ beforeImage, afterImage, className = '' }: BeforeAfterSliderProps) {
+function BeforeAfterSlider({ beforeImage, afterImage, originalImage, className = '' }: BeforeAfterSliderProps) {
   const [sliderPosition, setSliderPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const [displaySize, setDisplaySize] = useState<{ width: number; height: number } | null>(null);
   const [normalizedBefore, setNormalizedBefore] = useState<string | null>(null);
+  const [showOriginal, setShowOriginal] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const naturalSizeRef = useRef<{ width: number; height: number } | null>(null);
+
+  // Whether the before toggle is available (original differs from the default before)
+  const canToggle = !!originalImage && originalImage !== beforeImage;
 
   // Reset sizing when images change to prevent stale dimensions / FOUC
   useEffect(() => {
     setDisplaySize(null);
     naturalSizeRef.current = null;
     setNormalizedBefore(null);
+    setShowOriginal(false);
   }, [afterImage, beforeImage]);
 
   // Compute display size that fits within parent while maintaining aspect ratio
@@ -99,8 +106,25 @@ function BeforeAfterSlider({ beforeImage, afterImage, className = '' }: BeforeAf
         setNormalizedBefore(dataUrl);
       }
     };
-    beforeImg.src = beforeImage;
-  }, [beforeImage]); // eslint-disable-line react-hooks/exhaustive-deps
+    beforeImg.src = activeBeforeImage;
+  }, [activeBeforeImage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-normalize the before image when the toggle changes
+  useEffect(() => {
+    const nat = naturalSizeRef.current;
+    if (!nat) return;
+
+    setNormalizedBefore(null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const dataUrl = resizeToMatch(img, nat.width, nat.height);
+      if (dataUrl) {
+        setNormalizedBefore(dataUrl);
+      }
+    };
+    img.src = activeBeforeImage;
+  }, [showOriginal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updatePosition = useCallback((clientX: number) => {
     const container = containerRef.current;
@@ -159,8 +183,11 @@ function BeforeAfterSlider({ beforeImage, afterImage, className = '' }: BeforeAf
     };
   }, [isDragging]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Determine which before image to show based on toggle state
+  const activeBeforeImage = (canToggle && showOriginal) ? originalImage : beforeImage;
+
   // Use the normalized (dimension-matched) before image when available
-  const effectiveBefore = normalizedBefore || beforeImage;
+  const effectiveBefore = normalizedBefore || activeBeforeImage;
 
   return (
     <div
@@ -215,9 +242,27 @@ function BeforeAfterSlider({ beforeImage, afterImage, className = '' }: BeforeAf
       </div>
 
       {/* Labels */}
-      <div className="absolute bottom-3 left-3 z-10 rounded-lg bg-surface-950/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-white/70 backdrop-blur-sm">
-        Before
-      </div>
+      {canToggle ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowOriginal((v) => !v);
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5 rounded-lg bg-surface-950/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-white/70 backdrop-blur-sm transition-colors hover:bg-surface-950/90 hover:text-white/90"
+        >
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+          </svg>
+          {showOriginal ? 'Original' : 'Previous'}
+        </button>
+      ) : (
+        <div className="absolute bottom-3 left-3 z-10 rounded-lg bg-surface-950/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-white/70 backdrop-blur-sm">
+          Before
+        </div>
+      )}
       <div className="absolute bottom-3 right-3 z-10 rounded-lg bg-surface-950/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-white/70 backdrop-blur-sm">
         After
       </div>
