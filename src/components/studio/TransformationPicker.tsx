@@ -94,7 +94,7 @@ function TransformationPicker({
         ) : (
           <div className="flex items-center justify-center p-12">
             <p className="text-sm text-white/25">
-              Tell your stylist what you're looking for to see personalized options.
+              Tell your stylist what you&apos;re looking for to see personalized options.
             </p>
           </div>
         )}
