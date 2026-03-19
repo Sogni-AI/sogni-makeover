@@ -14,7 +14,7 @@ function SuggestionChips({ suggestions, onSelect, disabled }: SuggestionChipsPro
           key={i}
           onClick={() => onSelect(suggestion)}
           disabled={disabled}
-          className="rounded-full border border-primary-400/10 bg-surface-800/40 px-3 py-1 text-xs text-white/50 transition-all hover:border-primary-400/25 hover:bg-primary-400/[0.06] hover:text-white/70 disabled:opacity-30"
+          className="rounded-full border border-primary-400/15 bg-surface-800/90 px-3 py-1 text-xs text-white/80 transition-all hover:border-primary-400/30 hover:bg-surface-700/90 hover:text-white disabled:opacity-30"
         >
           {suggestion}
         </button>

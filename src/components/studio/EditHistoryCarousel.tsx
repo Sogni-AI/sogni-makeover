@@ -271,7 +271,7 @@ function EditHistoryCarousel() {
                   beforeImage={beforeImage!}
                   afterImage={steps[currentIndex].resultImageUrl}
                   originalImage={
-                    currentIndex > 0 && mode === 'stacked'
+                    currentIndex > 0 && mode === 'stacked' && originalImageUrl
                       ? originalImageUrl
                       : undefined
                   }
@@ -414,6 +414,11 @@ function EditHistoryCarousel() {
         onClose={() => setShowFullscreen(false)}
         beforeImage={beforeImage!}
         afterImage={currentIndex >= 0 ? steps[currentIndex].resultImageUrl : null}
+        originalImage={
+          currentIndex > 0 && mode === 'stacked' && originalImageUrl
+            ? originalImageUrl
+            : undefined
+        }
         transformationName={currentIndex >= 0 ? steps[currentIndex].transformation?.name : undefined}
         onDownload={handleDownload}
         onShare={handleShare}

@@ -48,12 +48,11 @@ function ChatPanel({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: '100%', opacity: 0 }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className="chat-panel flex h-full flex-col border-l border-primary-400/[0.06] bg-surface-950/95 backdrop-blur-sm"
+          className="chat-panel relative flex h-full flex-col border-l border-primary-400/[0.06] bg-surface-950/95 backdrop-blur-sm"
         >
           {/* Header */}
-          <div className="flex flex-shrink-0 items-center justify-between border-b border-primary-400/[0.06] px-3 py-2">
+          <div className="relative z-10 flex flex-shrink-0 items-center justify-between border-b border-primary-400/[0.06] px-3 py-2">
             <div className="flex items-center gap-2">
-              <span className="text-base">💇</span>
               <span className="text-xs font-medium text-white/60">Your Stylist</span>
             </div>
             <button
@@ -68,7 +67,7 @@ function ChatPanel({
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="relative z-10 flex-1 overflow-y-auto px-3 py-3">
             <div className="flex flex-col gap-3">
               {messages
                 .filter((m) => m.role !== 'tool' && m.role !== 'system')
@@ -86,17 +85,28 @@ function ChatPanel({
           </div>
 
           {/* Suggestions */}
-          <SuggestionChips
-            suggestions={suggestions}
-            onSelect={onSendMessage}
-            disabled={isStreaming}
-          />
+          <div className="relative z-10">
+            <SuggestionChips
+              suggestions={suggestions}
+              onSelect={onSendMessage}
+              disabled={isStreaming}
+            />
+          </div>
 
-          {/* Input */}
-          <ChatInput
-            onSend={onSendMessage}
-            disabled={isStreaming}
-          />
+          {/* Input with mascot anchored to its top edge */}
+          <div className="relative flex-shrink-0">
+            <img
+              src="/images/mascot.png"
+              alt="Stylist"
+              className="pointer-events-none absolute bottom-full -right-4 w-3/4 max-w-[200px]"
+            />
+            <div className="relative z-10">
+              <ChatInput
+                onSend={onSendMessage}
+                disabled={isStreaming}
+              />
+            </div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

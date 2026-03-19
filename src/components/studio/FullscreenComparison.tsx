@@ -69,6 +69,7 @@ function FullscreenComparison({
   onClose,
   beforeImage,
   afterImage,
+  originalImage,
   transformationName,
   onDownload,
   onShare,
@@ -119,6 +120,7 @@ function FullscreenComparison({
             <BeforeAfterSlider
               beforeImage={beforeImage}
               afterImage={afterImage}
+              originalImage={originalImage}
               className="fullscreen-comparison-slider"
             />
           </motion.div>

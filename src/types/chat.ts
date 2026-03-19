@@ -100,4 +100,5 @@ export interface MakeoverToolContext {
 
   getSogniClient: () => unknown;
   getPhotoAnalysis: () => PhotoAnalysis;
+  getCurrentCategories: () => GeneratedCategory[];
 }

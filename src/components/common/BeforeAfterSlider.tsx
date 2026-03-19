@@ -52,6 +52,9 @@ function BeforeAfterSlider({ beforeImage, afterImage, originalImage, className =
   // Whether the before toggle is available (original differs from the default before)
   const canToggle = !!originalImage && originalImage !== beforeImage;
 
+  // Determine which before image to show based on toggle state
+  const activeBeforeImage = (canToggle && showOriginal) ? originalImage : beforeImage;
+
   // Reset sizing when images change to prevent stale dimensions / FOUC
   useEffect(() => {
     setDisplaySize(null);
@@ -182,9 +185,6 @@ function BeforeAfterSlider({ beforeImage, afterImage, originalImage, className =
       window.removeEventListener('touchend', handleEnd);
     };
   }, [isDragging]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Determine which before image to show based on toggle state
-  const activeBeforeImage = (canToggle && showOriginal) ? originalImage : beforeImage;
 
   // Use the normalized (dimension-matched) before image when available
   const effectiveBefore = normalizedBefore || activeBeforeImage;

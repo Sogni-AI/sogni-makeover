@@ -69,6 +69,49 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const photoAnalysisRef = useRef<PhotoAnalysis>(FALLBACK_ANALYSIS);
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
+  const tokenQueueRef = useRef<string[]>([]);
+  const drainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const drainTokenQueue = useCallback(() => {
+    if (tokenQueueRef.current.length === 0) {
+      drainTimerRef.current = null;
+      return;
+    }
+    const token = tokenQueueRef.current.shift()!;
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.isStreaming) {
+        return [...prev.slice(0, -1), { ...last, content: last.content + token }];
+      }
+      return prev;
+    });
+    drainTimerRef.current = setTimeout(drainTokenQueue, 30);
+  }, []);
+
+  const enqueueToken = useCallback((token: string) => {
+    tokenQueueRef.current.push(token);
+    if (!drainTimerRef.current) {
+      drainTimerRef.current = setTimeout(drainTokenQueue, 30);
+    }
+  }, [drainTokenQueue]);
+
+  const flushTokenQueue = useCallback(() => {
+    if (drainTimerRef.current) {
+      clearTimeout(drainTimerRef.current);
+      drainTimerRef.current = null;
+    }
+    if (tokenQueueRef.current.length > 0) {
+      const remaining = tokenQueueRef.current.join('');
+      tokenQueueRef.current = [];
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.isStreaming) {
+          return [...prev.slice(0, -1), { ...last, content: last.content + remaining }];
+        }
+        return prev;
+      });
+    }
+  }, []);
 
   const buildToolContext = useCallback((): MakeoverToolContext => ({
     generateFromPrompt,
@@ -150,13 +193,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         toolContext,
         {
           onToken: (token) => {
-            setMessages((prev) => {
-              const last = prev[prev.length - 1];
-              if (last?.isStreaming) {
-                return [...prev.slice(0, -1), { ...last, content: last.content + token }];
-              }
-              return prev;
-            });
+            enqueueToken(token);
           },
           onToolCallStart: (toolCall) => {
             setCurrentToolProgress({
@@ -184,8 +221,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             setTimeout(() => setCurrentToolProgress(null), 2000);
           },
           onComplete: (finalHistory) => {
-            // Replace messages with the authoritative history from chat service
-            // But preserve streaming state cleanup
+            flushTokenQueue();
             const cleaned = finalHistory.map((m) => ({ ...m, isStreaming: false }));
             setMessages(cleaned);
           },
@@ -226,7 +262,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } finally {
       setIsStreaming(false);
     }
-  }, [isStreaming, buildToolContext, sogniClient]);
+  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue]);
 
   const initWithPhoto = useCallback(async (imageUrl: string) => {
     // Run photo analysis
@@ -257,17 +293,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         toolContext,
         {
           onToken: (token) => {
-            setMessages((prev) => {
-              const last = prev[prev.length - 1];
-              if (last?.isStreaming) {
-                return [...prev.slice(0, -1), { ...last, content: last.content + token }];
-              }
-              return prev;
-            });
+            enqueueToken(token);
           },
           onToolCallStart: () => {},
           onToolCallComplete: () => {},
           onComplete: (finalHistory) => {
+            flushTokenQueue();
             setMessages(finalHistory.map((m) => ({ ...m, isStreaming: false })));
           },
           onError: () => {
@@ -299,7 +330,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } finally {
       setIsStreaming(false);
     }
-  }, [sogniClient, buildToolContext]);
+  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue]);
 
   const notifyTransformationSelected = useCallback((transformation: GeneratedTransformation) => {
     // Add an informational message to chat history (no LLM invocation).
