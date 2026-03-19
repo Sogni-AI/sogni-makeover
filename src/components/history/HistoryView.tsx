@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/context/ToastContext';
-import { CATEGORIES } from '@/constants/transformations';
 import Button from '@/components/common/Button';
 import type { HistoryItem } from '@/types';
 
@@ -32,8 +31,9 @@ function formatDuration(ms: number): string {
 }
 
 function getCategoryLabel(item: HistoryItem): string {
-  const cat = CATEGORIES[item.transformation.category];
-  return cat?.name ?? item.transformation.category;
+  // Capitalize the category name for display
+  const raw = item.transformation.category;
+  return raw.charAt(0).toUpperCase() + raw.slice(1).replace(/-/g, ' ');
 }
 
 // ---------------------------------------------------------------------------
