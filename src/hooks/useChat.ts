@@ -306,6 +306,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     sendMessage(msg);
   }, [sendMessage]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const notifyGenerationComplete = useCallback((_resultUrl: string) => {
     // The chat service handles this via tool result callbacks
   }, []);
