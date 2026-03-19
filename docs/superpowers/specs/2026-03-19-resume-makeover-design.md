@@ -38,9 +38,17 @@ At each save point (after completed generation), the following is written to Ind
 | `selectedGender` | `Gender \| null` | User's selected gender |
 | `timestamp` | `number` | When the session was last saved |
 
+### Additional Persisted Data
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `photoAnalysis` | `PhotoAnalysis \| null` | AI photo analysis result — needed as context for post-resume chat messages |
+| `generatedCategories` | `GeneratedCategory[]` | AI-generated transformation categories — needed to populate the transformation grid on resume |
+| `version` | `number` | Schema version for future migration/invalidation |
+
 ### Storage Helper Module
 
-A new module `src/utils/sessionStorage.ts` provides:
+A new module `src/utils/makeoverSessionDb.ts` provides:
 
 - `saveSession(data)` — write/overwrite the active session
 - `loadSession()` — read the active session (returns `null` if none)
@@ -67,17 +75,29 @@ When "Resume Makeover" is clicked:
 
 1. Load session data from IndexedDB via `loadSession()`
 2. Reconstruct original image state:
-   - Create a `File` object from the base64 data
-   - Generate an object URL for display
-   - Set `originalImage`, `originalImageUrl`, `originalImageBase64` in AppContext
+   - Add a `restoreOriginalImage(base64: string)` method to AppContext that directly sets `originalImageRaw` (as a reconstructed File), `originalImageUrl` (blob URL), and `originalImageBase64` — avoiding the wasteful round-trip through `setOriginalImage` which would re-read the File back to base64
 3. Restore edit stack:
    - Populate `steps` array with persisted steps (including base64 data)
    - Restore `currentIndex` and `mode`
-   - Generate object URLs for each step's `resultImageUrl`
-4. Restore chat messages into `useChat` state
-5. Restore selected gender
-6. Set `currentView` to `'studio'`
-7. Open chat sidebar
+   - Edit stack step URLs are remote CDN URLs (not blob URLs), so no URL generation needed
+4. Restore chat messages via `useChat.restoreMessages()`
+5. Restore `photoAnalysis` into useChat so post-resume chat has full context
+6. Restore `generatedCategories` into useChat so the transformation grid is populated
+7. Restore selected gender
+8. Set `currentView` to `'studio'`
+9. Open chat sidebar
+
+### Skipping Init on Resume
+
+MakeoverStudio's `initWithPhoto` effect fires when `originalImageUrl` is set and `initTriggered.current` is false. On resume, this would overwrite restored chat messages with a fresh AI greeting. To prevent this:
+
+- Add an `isResumedSession` flag (e.g., via AppContext or a ref)
+- MakeoverStudio checks this flag and skips `initWithPhoto` when resuming
+- The flag is cleared after the first studio render
+
+### Save Point Timing: Base64 Race Condition
+
+When `pushStep` is called, the step's `resultImageBase64` may initially be empty (set to `''`) because base64 is fetched asynchronously from the CDN URL. The save point must await the base64 fetch before writing to IndexedDB. This can be done by triggering the save after the `updateLatestBase64` call completes, not immediately after `pushStep`.
 
 ## Chat Pagination
 
@@ -119,7 +139,7 @@ This happens in AppContext or MakeoverStudio, wherever the post-generation logic
 
 | File | Changes |
 |------|---------|
-| `src/utils/sessionStorage.ts` | **New** — IndexedDB helper for session persistence |
+| `src/utils/makeoverSessionDb.ts` | **New** — IndexedDB helper for session persistence |
 | `src/components/landing/LandingHero.tsx` | Add "Resume Makeover" button, check for saved session |
 | `src/context/AppContext.tsx` | Add save point logic after generation, restore session on resume, clear on resetPhoto |
 | `src/hooks/useChat.ts` | Accept initial messages for resume, expose `setMessages` or `restoreMessages` |
