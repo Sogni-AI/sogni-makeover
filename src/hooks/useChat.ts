@@ -439,11 +439,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (isAutoAnalyzingRef.current) return;
 
     // Track auto-pilot iterations — stop if limit reached
+    let autoPilotActive = isAutoPilot;
     if (isAutoPilot) {
       autoPilotIterationsRef.current++;
       if (autoPilotIterationsRef.current > MAX_AUTO_PILOT_ITERATIONS) {
         setIsAutoPilot(false);
         autoPilotIterationsRef.current = 0;
+        autoPilotActive = false;
       }
     }
 
@@ -452,7 +454,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     const remaining = MAX_AUTO_PILOT_ITERATIONS - autoPilotIterationsRef.current;
     const autoPilotConfig: AutoPilotConfig = {
-      enabled: isAutoPilot && remaining > 0,
+      enabled: autoPilotActive && remaining > 0,
       remainingIterations: remaining,
     };
 
@@ -561,12 +563,118 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const openChat = useCallback(() => setIsChatOpen(true), []);
   const closeChat = useCallback(() => setIsChatOpen(false), []);
   const toggleChat = useCallback(() => setIsChatOpen((prev) => !prev), []);
+  const autoPilotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const kickOffAutoPilot = useCallback(async () => {
+    if (isStreaming || !generatedCategoriesRef.current.length) return;
+    setIsStreaming(true);
+
+    autoPilotIterationsRef.current = 1;
+    const remaining = MAX_AUTO_PILOT_ITERATIONS - 1;
+    const autoPilotConfig: AutoPilotConfig = { enabled: true, remainingIterations: remaining };
+
+    const syntheticMessage = '[Auto-Pilot activated. Pick the transformation you are most excited about from the current grid and apply it with generate_makeover. Go!]';
+
+    const assistantPlaceholderId = `msg-${Date.now()}-autopilot`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantPlaceholderId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    try {
+      isAutoAnalyzingRef.current = true;
+      const toolContext = buildToolContext();
+      await sendChatMessage(
+        syntheticMessage,
+        messagesRef.current,
+        photoAnalysisRef.current,
+        toolContext,
+        {
+          onToken: (token) => { enqueueToken(token); },
+          onNewAssistantMessage: () => {
+            flushTokenQueue();
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              const finalized = last?.isStreaming
+                ? [...prev.slice(0, -1), { ...last, isStreaming: false }]
+                : prev;
+              return [...finalized, {
+                id: `msg-${Date.now()}-round`,
+                role: 'assistant' as const,
+                content: '',
+                timestamp: Date.now(),
+                isStreaming: true,
+              }];
+            });
+          },
+          onToolCallStart: (toolCall) => {
+            setCurrentToolProgress({ toolName: toolCall.name, status: 'running', message: getToolMessage(toolCall.name) });
+          },
+          onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
+            setCurrentToolProgress({
+              toolName: toolCall.name,
+              status: result.success ? 'completed' : 'failed',
+              message: result.success ? 'Done!' : (result.error || 'Failed'),
+            });
+            if (toolCall.name === 'generate_transformations') {
+              handleTransformationResult(result);
+            }
+            setTimeout(() => setCurrentToolProgress(null), 2000);
+          },
+          onComplete: (finalHistory) => {
+            flushTokenQueue();
+            const filtered = finalHistory
+              .filter((m) => !(m.role === 'user' && m.content.startsWith('[Auto-Pilot activated')))
+              .map((m) => ({ ...m, isStreaming: false }));
+            setMessages(filtered);
+          },
+          onError: (error) => {
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.isStreaming) {
+                return [...prev.slice(0, -1), { ...last, content: `Auto-pilot hit a snag: ${error.message}`, isStreaming: false }];
+              }
+              return prev;
+            });
+          },
+        },
+        sogniClient,
+        autoPilotConfig
+      );
+    } catch (error) {
+      console.error('[useChat] Auto-pilot kickoff error:', error);
+    } finally {
+      isAutoAnalyzingRef.current = false;
+      setIsStreaming(false);
+    }
+  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult]);
+
   const toggleAutoPilot = useCallback(() => {
     setIsAutoPilot((prev) => {
-      if (prev) autoPilotIterationsRef.current = 0; // Reset counter when turning off
-      return !prev;
+      const next = !prev;
+      if (next) {
+        // Delay kickoff by 2 seconds to let user confirm intent
+        autoPilotTimerRef.current = setTimeout(() => {
+          autoPilotTimerRef.current = null;
+          kickOffAutoPilot();
+        }, 2000);
+      } else {
+        // Turning off — cancel pending kickoff if any
+        if (autoPilotTimerRef.current) {
+          clearTimeout(autoPilotTimerRef.current);
+          autoPilotTimerRef.current = null;
+        }
+        autoPilotIterationsRef.current = 0;
+      }
+      return next;
     });
-  }, []);
+  }, [kickOffAutoPilot]);
 
   return {
     messages,

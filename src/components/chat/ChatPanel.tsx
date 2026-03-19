@@ -52,7 +52,7 @@ function ChatPanel({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: '100%', opacity: 0 }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className="chat-panel relative flex h-full flex-col border-l border-primary-400/[0.06] bg-surface-950/95 backdrop-blur-sm"
+          className="chat-panel relative flex h-full flex-col overflow-x-clip border-l border-primary-400/[0.06] bg-surface-950/95 backdrop-blur-sm"
         >
           {/* Header */}
           <div className="relative z-10 flex flex-shrink-0 items-center justify-between border-b border-primary-400/[0.06] px-3 py-2">
@@ -104,7 +104,7 @@ function ChatPanel({
             <img
               src="/images/mascot.png"
               alt="Stylist"
-              className="pointer-events-none absolute bottom-full right-0 w-1/3 max-w-[100px] md:right-0 md:w-3/4 md:max-w-[200px]"
+              className="pointer-events-none absolute bottom-full -right-4 w-1/3 max-w-[100px] md:-right-8 md:w-3/4 md:max-w-[200px]"
             />
             <div className="relative z-10">
               <ChatInput
