@@ -21,7 +21,8 @@ type EditStackAction =
   | { type: 'updateBase64'; index: number; base64: string }
   | { type: 'updateLatestBase64'; base64: string }
   | { type: 'setMode'; mode: EditMode }
-  | { type: 'reset' };
+  | { type: 'reset' }
+  | { type: 'restore'; steps: EditStep[]; currentIndex: number; mode: EditMode };
 
 const initialState: EditStackState = {
   steps: [],
@@ -81,6 +82,13 @@ function editStackReducer(state: EditStackState, action: EditStackAction): EditS
     case 'reset':
       return initialState;
 
+    case 'restore':
+      return {
+        steps: action.steps,
+        currentIndex: action.currentIndex,
+        mode: action.mode,
+      };
+
     default:
       return state;
   }
@@ -111,6 +119,7 @@ export interface UseEditStackReturn {
   updateLatestBase64: (base64: string) => void;
   setMode: (mode: EditMode) => void;
   reset: () => void;
+  restore: (state: { steps: EditStep[]; currentIndex: number; mode: EditMode }) => void;
 }
 
 export function useEditStack(): UseEditStackReturn {
@@ -136,6 +145,11 @@ export function useEditStack(): UseEditStackReturn {
   );
   const setMode = useCallback((mode: EditMode) => dispatch({ type: 'setMode', mode }), []);
   const reset = useCallback(() => dispatch({ type: 'reset' }), []);
+  const restore = useCallback(
+    (state: { steps: EditStep[]; currentIndex: number; mode: EditMode }) =>
+      dispatch({ type: 'restore', ...state }),
+    [],
+  );
 
   return {
     steps,
@@ -155,5 +169,6 @@ export function useEditStack(): UseEditStackReturn {
     updateLatestBase64,
     setMode,
     reset,
+    restore,
   };
 }
