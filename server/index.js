@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import sogniRoutes from './routes/sogni.js';
+import photoAnalysisRoutes from './routes/photoAnalysis.js';
+import chatRoutes from './routes/chat.js';
 import { shutdownSogniServices } from './services/sogni.js';
 import process from 'process';
 
@@ -66,6 +68,8 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // API routes
 app.use('/sogni', sogniRoutes);
 app.use('/api/sogni', sogniRoutes);
+app.use('/api/photo-analysis', photoAnalysisRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Health check endpoints
 app.get('/health', (req, res) => {
