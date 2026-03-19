@@ -229,18 +229,13 @@ function LandingHero() {
           {/* Pill badge with mascot */}
           <motion.div variants={itemVariants} className="flex flex-col items-center">
             {/* Mascot peeking from behind pill */}
-            <motion.div
-              initial={{ y: 30, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 1.0, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-              className="h-[110px] overflow-hidden pointer-events-none sm:h-[140px] lg:h-[180px]"
-            >
+            <div className="h-[110px] overflow-hidden pointer-events-none sm:h-[140px] lg:h-[180px]">
               <img
                 src="/images/mascot.png"
                 alt="Sogni Makeover mascot"
                 className="h-auto w-[140px] sm:w-[180px] lg:w-[220px]"
               />
-            </motion.div>
+            </div>
 
             <span className="relative z-10 inline-flex items-center gap-2 rounded-full border border-primary-400/15 bg-primary-400/[0.04] px-4 py-1.5 text-sm tracking-wide text-primary-300/80">
               <span className="h-1 w-1 rounded-full bg-primary-400/60" />
@@ -291,9 +286,11 @@ function LandingHero() {
                   >
                     Start Your Makeover
                   </Button>
-                  <p className="text-sm font-light tracking-wide text-white/20">
-                    No sign-up required &bull; Free to try
-                  </p>
+                  {!isLoggedIn && (
+                    <p className="text-sm font-light tracking-wide text-white/20">
+                      No sign-up required &bull; Free to try
+                    </p>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div
