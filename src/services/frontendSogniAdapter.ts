@@ -484,6 +484,14 @@ export class FrontendSogniClientAdapter {
   }
 
   /**
+   * Expose the raw SogniClient for direct chat API access.
+   * The chat API doesn't need the adapter's project-event normalization.
+   */
+  getChatClient(): SogniClient {
+    return this.realClient;
+  }
+
+  /**
    * Cancel a project by ID.
    * Returns a result compatible with BackendSogniClient's cancelProject.
    */

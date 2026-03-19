@@ -720,3 +720,21 @@ export async function generateImage(
 export function isNetworkError(error: unknown): error is NetworkError {
   return error instanceof NetworkError;
 }
+
+/**
+ * Analyze a photo using the backend LLM vision endpoint (demo users).
+ */
+export async function analyzePhoto(imageBase64: string): Promise<import('@/types/chat').PhotoAnalysis> {
+  const response = await fetch(`${API_BASE_URL}/api/photo-analysis/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64 }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Photo analysis failed: ${response.status}`);
+  }
+
+  return response.json();
+}
