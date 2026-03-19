@@ -857,6 +857,122 @@ export async function generateImage(client, params, progressCallback, localProje
   return await withSogniClient(runGeneration, 'image generation');
 }
 
+// ---------------------------------------------------------------------------
+// Photo subject analysis via LLM vision
+// ---------------------------------------------------------------------------
+
+const SUBJECT_ANALYSIS_MODEL = 'qwen3.5-35b-a3b-gguf-q4km';
+
+const SUBJECT_ANALYSIS_SYSTEM_PROMPT = `You are an eccentric legendary Hollywood stylist to the stars. Analyze the portrait photo as if the subject is the client sitting in your studio chair, ready to upgrade their look.
+
+Return JSON with your professional assessment:
+{
+  "subjectCount": 1,
+  "subjectDescription": "a young woman with long dark curly hair",
+  "perceivedGender": "female",
+  "genderConfidence": "high",
+  "estimatedAgeRange": "25-30",
+  "features": {
+    "hairColor": "dark brown",
+    "hairStyle": "long, curly",
+    "hairLength": "long",
+    "skinTone": "medium warm",
+    "facialHair": null,
+    "glasses": false,
+    "distinctiveFeatures": ["killer cheekbones", "full lips"]
+  },
+  "stylistNotes": "That bone structure is begging for a dramatic side part. The warm skin tone opens up the whole copper-to-auburn palette."
+}
+
+Focus on: apparent gender, age range, hair (color/length/style), skin tone, facial hair, glasses, distinctive visible features. Do NOT mention clothing or background. The stylistNotes should be your candid professional read — what excites you about this client's potential.`;
+
+export async function analyzePhotoSubject(imageBase64DataUri) {
+  const client = await getOrCreateGlobalSogniClient();
+
+  const messages = [
+    { role: 'system', content: SUBJECT_ANALYSIS_SYSTEM_PROMPT },
+    {
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: imageBase64DataUri } },
+        { type: 'text', text: 'Describe the main subject of this portrait.' },
+      ],
+    },
+  ];
+
+  let fullContent = '';
+  const stream = await client.chat.completions.create({
+    model: SUBJECT_ANALYSIS_MODEL,
+    messages,
+    stream: true,
+    tokenType: 'spark',
+    temperature: 0.1,
+    top_p: 0.9,
+    max_tokens: 300,
+    think: false,
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (delta) fullContent += delta;
+  }
+
+  // Parse JSON, handling markdown code fences
+  let cleaned = fullContent.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) cleaned = fenceMatch[1].trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return {
+      subjectCount: typeof parsed.subjectCount === 'number' ? parsed.subjectCount : 1,
+      subjectDescription: typeof parsed.subjectDescription === 'string' ? parsed.subjectDescription : 'the person',
+      perceivedGender: ['male', 'female'].includes(parsed.perceivedGender) ? parsed.perceivedGender : null,
+      genderConfidence: ['high', 'medium', 'low'].includes(parsed.genderConfidence) ? parsed.genderConfidence : 'low',
+      estimatedAgeRange: typeof parsed.estimatedAgeRange === 'string' ? parsed.estimatedAgeRange : null,
+      features: parsed.features || {},
+      stylistNotes: typeof parsed.stylistNotes === 'string' ? parsed.stylistNotes : '',
+    };
+  } catch {
+    return {
+      subjectCount: 1,
+      subjectDescription: 'the person',
+      perceivedGender: null,
+      genderConfidence: 'low',
+      estimatedAgeRange: null,
+      features: {},
+      stylistNotes: '',
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chat completion proxy for demo users
+// ---------------------------------------------------------------------------
+
+const CHAT_MODEL = 'qwen3.5-35b-a3b-gguf-q4km';
+
+export async function chatCompletion(messages, tools = []) {
+  const client = await getOrCreateGlobalSogniClient();
+
+  const params = {
+    model: CHAT_MODEL,
+    messages,
+    stream: true,
+    tokenType: 'spark',
+    temperature: 0.7,
+    top_p: 0.9,
+    max_tokens: 500,
+    think: false,
+  };
+
+  if (tools.length > 0) {
+    params.tools = tools;
+  }
+
+  return client.chat.completions.create(params);
+}
+
 // Client info for debugging
 export async function getClientInfo(sessionId) {
   try {
