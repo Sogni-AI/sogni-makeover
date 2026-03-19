@@ -114,7 +114,7 @@ what excites you about this client's potential.
 
 ### Dual-Path Architecture
 
-- **Authenticated users**: Direct call to `sogniClient.chat.completions.create()`
+- **Authenticated users**: Access the raw `SogniClient` via a new `getChatClient()` method on `FrontendSogniClientAdapter` (see Section 8). Call `rawClient.chat.completions.create()` directly — the chat API does not need the adapter's project-event normalization layer.
 - **Demo users**: `POST /api/photo-analysis/analyze` → backend proxy
 
 ### Image Preprocessing
@@ -125,7 +125,7 @@ what excites you about this client's potential.
 
 ### Caching
 
-Results cached by image URL/hash to avoid re-analyzing the same photo.
+Results cached by blob URL within the session. Since images are `File` objects converted via `URL.createObjectURL()`, the URL is unique per session but stable within one. No cross-session caching needed.
 
 ### Fallback
 
@@ -209,6 +209,7 @@ Client analysis:
 - **Streaming**: true
 - **Token type**: spark
 - **Tool calling**: enabled (OpenAI-format function definitions)
+- **`think: false`** — disables Qwen's extended reasoning to prevent raw `<think>` blocks from streaming to users. If thinking is ever enabled in the future, `stripThinkBlocks()` must be added to the streaming handler (see sogni-chat's implementation).
 
 ### Tool Calling Loop
 
@@ -242,18 +243,33 @@ interface ChatMessage {
   suggestions?: string[];
 }
 
-interface ChatService {
-  sendMessage(
+interface ChatStreamCallbacks {
+  onToken: (token: string) => void;
+  onToolCallStart: (toolCall: ToolCall) => void;
+  onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => void;
+  onComplete: (messages: ChatMessage[]) => void;
+  onError: (error: Error) => void;
+}
+
+// Chat service is constructed with dependencies, not passed per-call
+class ChatService {
+  constructor(
+    private toolRegistry: ToolRegistry,
+    private toolContext: MakeoverToolContext
+  ) {}
+
+  // Returns the full updated conversation history (not a single message)
+  async sendMessage(
     userMessage: string,
     conversationHistory: ChatMessage[],
     photoAnalysis: PhotoAnalysis,
-    tools: ToolDefinition[],
-    onToken: (token: string) => void,
-    onToolCall: (toolCall: ToolCall) => Promise<ToolResult>,
+    callbacks: ChatStreamCallbacks,
     sogniClient?: SogniClient | null
-  ): Promise<ChatMessage>;
+  ): Promise<ChatMessage[]>;
 }
 ```
+
+The service owns the tool calling loop internally: it consumes the SDK's async iterable `ChatStream`, checks for `tool_calls` on the final result, executes them via the `toolRegistry`, appends tool results to the conversation, and calls `create()` again — up to 3 rounds. Callbacks notify the UI at each stage. This matches sogni-chat's proven pattern.
 
 ## 3. Transformation Service
 
@@ -338,9 +354,17 @@ function generateTransformations(
 ): Promise<GeneratedCategory[]>
 ```
 
+### JSON Parsing Robustness
+
+LLMs frequently wrap JSON in markdown code fences (`` ```json ... ``` ``). The service must:
+- Strip markdown code fence wrappers before parsing
+- Handle partial/malformed JSON gracefully (retry once with a "please return valid JSON" nudge)
+- Validate required fields (`name`, `prompt`, `intensity`) and fill defaults for missing optional fields
+- Return a sensible fallback set of generic transformations if parsing fails entirely
+
 ### Compatibility
 
-The `GeneratedTransformation` interface maps to the existing `Transformation` type that `generateMakeover` in AppContext expects. The `pitch` and dynamically generated fields are additional — the core `prompt`, `intensity`, `negativePrompt` fields match the existing pipeline.
+The `GeneratedTransformation` interface is consumed by `generateFromPrompt()` in `MakeoverToolContext` (see Section 4), which constructs a synthetic `Transformation` object with `category: 'ai-generated'` and `subcategory: 'chat'` to feed the existing `generateMakeover` pipeline.
 
 ## 4. Tool Registry & Tools
 
@@ -491,6 +515,43 @@ Returns: { categories: GeneratedCategory[] }
 Timeout: 30 seconds
 ```
 
+### MakeoverToolContext
+
+Tool handlers need access to React state and functions from AppContext. A `MakeoverToolContext` interface is passed to every handler at execution time, decoupling tools from React context directly.
+
+```typescript
+interface MakeoverToolContext {
+  // Generation — accepts simplified params, not full Transformation
+  generateFromPrompt: (params: {
+    prompt: string;
+    intensity?: number;
+    negativePrompt?: string;
+    useStackedInput?: boolean;  // true = apply on top of current result
+  }) => Promise<{ resultUrl: string; projectId: string }>;
+
+  // State accessors
+  getOriginalImageBase64: () => string | null;
+  getOriginalImageUrl: () => string | null;
+  getCurrentResultUrl: () => string | null;
+  getEditStack: () => EditStep[];
+  getEditStackDepth: () => number;
+  isGenerating: () => boolean;
+
+  // Vision analysis (for analyze_result, compare_before_after)
+  analyzeImage: (imageUrl: string, systemPrompt: string) => Promise<string>;
+
+  // Sogni client (for LLM calls in generate_transformations)
+  getSogniClient: () => SogniClient | null;
+
+  // Photo analysis (for generate_transformations)
+  getPhotoAnalysis: () => PhotoAnalysis;
+}
+```
+
+`generateFromPrompt` is a new wrapper added to AppContext that constructs a synthetic `Transformation` object internally (with `category: 'ai-generated'` and `subcategory: 'chat'`) and calls the existing `generateMakeover` pipeline. This avoids refactoring `generateMakeover` while giving tools a clean interface.
+
+The `useChat` hook creates a `MakeoverToolContext` from AppContext values and passes it to the `ChatService` constructor, which passes it through to the registry on each `execute()` call.
+
 ### Registry
 
 ```typescript
@@ -499,7 +560,11 @@ class ToolRegistry {
 
   register(name: string, definition: ToolDefinition, handler: ToolHandler): void;
   getDefinitions(): ToolDefinition[];
-  execute(name: string, args: Record<string, unknown>): Promise<ToolResult>;
+  execute(
+    name: string,
+    args: Record<string, unknown>,
+    context: MakeoverToolContext
+  ): Promise<ToolResult>;
 }
 ```
 
@@ -590,10 +655,33 @@ POST /api/photo-analysis/analyze
 ```
 POST /api/chat/completions
 - Body: { messages: ChatMessage[], tools: ToolDefinition[] }
-- Returns: SSE stream of tokens + tool calls
+- Returns: SSE stream (Content-Type: text/event-stream)
 - Origin: *.sogni.ai only
 - Calls: sogni.chatCompletion()
 ```
+
+**SSE Event Format** (modeled on the existing `/api/sogni/progress` pattern):
+
+```
+event: token
+data: {"content": "Oh hello"}
+
+event: token
+data: {"content": "! *adjusts"}
+
+event: tool_call
+data: {"id": "call_123", "name": "generate_transformations", "arguments": "{\"intent\": \"dramatic hair\"}"}
+
+event: complete
+data: {"finishReason": "stop", "usage": {"promptTokens": 450, "completionTokens": 120}}
+
+event: error
+data: {"message": "Model timeout", "code": "timeout"}
+```
+
+The frontend `chatService` consumes this stream via `EventSource` or `fetch` with `ReadableStream` (matching the pattern already used for generation progress). Tool calls received via SSE are executed client-side by the `useChat` hook, and results are sent back as a new `/api/chat/completions` request with the tool result appended to the messages array.
+
+**Note**: For demo users, the tool calling loop happens client-side across multiple SSE requests (LLM call → tool_call event → client executes tool → new request with tool result). This is less efficient than the authenticated path where the chat service can run the full loop in one call, but keeps the backend stateless.
 
 ### Updates to `server/services/sogni.js`
 
@@ -625,8 +713,13 @@ app.use('/api/chat', chatRoutes);
 | File | Lines | Reason |
 |------|-------|--------|
 | `src/constants/transformations.ts` | 3207 | Replaced by AI-generated transformations |
-| Gender selection onboarding step | ~100 | AI infers from photo, confirms in chat |
+| Gender selection step in `LandingHero.tsx` | ~100 | AI infers from photo, confirms in chat if unsure |
 | Static `CATEGORIES` constant | ~50 | Replaced by dynamic categories |
+| Gender-based filtering in `CategoryNav`, `TransformationPicker` | ~30 | No longer needed — AI generates gender-appropriate options |
+
+**Quality tier selection**: The current onboarding flow is `gender → quality → capture`. With gender removed, the flow becomes `quality → capture`. The quality tier step (Lightning vs Standard model) is preserved — it moves to be the first/only onboarding step. Alternatively, it can be surfaced in Settings or as part of the chat ("Want speed or detail? Lightning is fast, Standard is pristine."). Implementation plan should decide.
+
+**`selectedGender` in AppContext**: Remains as an optional field but is populated by the AI's photo analysis (`perceivedGender`) instead of user selection. Components that previously read `selectedGender` to filter transformations no longer need it since the AI generates gender-appropriate options directly.
 
 ### Modified
 
@@ -637,7 +730,7 @@ app.use('/api/chat', chatRoutes);
 | `CategoryNav.tsx` | Dynamic categories instead of static |
 | `MakeoverStudio.tsx` | Adds ChatPanel alongside existing layout |
 | `src/services/api.ts` | Adds `analyzePhoto()` and `chatCompletion()` |
-| `src/services/frontendSogniAdapter.ts` | Adds chat completion methods |
+| `src/services/frontendSogniAdapter.ts` | Adds `getChatClient(): SogniClient` method that exposes the underlying raw SDK client for direct `chat.completions.create()` calls. The adapter's project-event normalization is not needed for chat — we pass through the raw client. This matches how sogni-photobooth accesses the chat API. |
 
 ### Kept As-Is
 
@@ -681,6 +774,36 @@ app.use('/api/chat', chatRoutes);
 
 ### Hooks
 - `src/hooks/useChat.ts`
+
+### `useChat` Hook Interface
+
+```typescript
+interface UseChatReturn {
+  // State
+  messages: ChatMessage[];
+  isStreaming: boolean;
+  isChatOpen: boolean;
+  currentToolProgress: ToolProgress | null;
+  generatedCategories: GeneratedCategory[];
+
+  // Actions
+  sendMessage: (text: string) => Promise<void>;
+  openChat: () => void;
+  closeChat: () => void;
+  toggleChat: () => void;
+
+  // Called by grid when user clicks a transformation card
+  notifyTransformationSelected: (transformation: GeneratedTransformation) => void;
+
+  // Called by AppContext when a generation completes (from any source)
+  notifyGenerationComplete: (resultUrl: string) => void;
+
+  // Initialize with photo analysis (triggers AI greeting)
+  initWithPhoto: (photoAnalysis: PhotoAnalysis) => Promise<void>;
+}
+```
+
+The hook creates a `ChatService` and `MakeoverToolContext` from AppContext values. It manages the message array, streaming state, and bridges between chat and grid interactions. Lives alongside AppContext — not inside it — to keep concerns separated.
 
 ### Backend
 - `server/routes/photoAnalysis.js`
