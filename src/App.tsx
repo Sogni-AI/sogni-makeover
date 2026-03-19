@@ -89,7 +89,7 @@ function AppContent() {
       {authState.sessionTransferred && authState.error && (
         <SessionTransferBanner message={authState.error} />
       )}
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {currentView === 'landing' && <LandingHero />}
         {currentView === 'capture' && <PhotoCapture />}
         {currentView === 'studio' && <MakeoverStudio />}

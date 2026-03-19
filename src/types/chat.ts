@@ -61,6 +61,7 @@ export interface ChatStreamCallbacks {
   onToken: (token: string) => void;
   onToolCallStart: (toolCall: ToolCall) => void;
   onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => void;
+  onNewAssistantMessage?: () => void;
   onComplete: (messages: ChatMessage[]) => void;
   onError: (error: Error) => void;
 }

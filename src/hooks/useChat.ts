@@ -10,7 +10,7 @@ import type {
   GeneratedTransformation,
 } from '@/types/chat';
 import type { EditStep } from '@/types';
-import { sendChatMessage } from '@/services/chatService';
+import { sendChatMessage, type AutoPilotConfig } from '@/services/chatService';
 import { analyzePhotoSubject, FALLBACK_ANALYSIS } from '@/services/photoAnalysisService';
 
 interface UseChatOptions {
@@ -38,11 +38,13 @@ export interface UseChatReturn {
   currentToolProgress: ToolProgress | null;
   generatedCategories: GeneratedCategory[];
   photoAnalysis: PhotoAnalysis | null;
+  isAutoPilot: boolean;
 
   sendMessage: (text: string) => Promise<void>;
   openChat: () => void;
   closeChat: () => void;
   toggleChat: () => void;
+  toggleAutoPilot: () => void;
   notifyTransformationSelected: (transformation: GeneratedTransformation) => void;
   notifyGenerationComplete: (transformation: { name: string; prompt: string }, resultUrl: string) => Promise<void>;
   initWithPhoto: (imageUrl: string) => Promise<void>;
@@ -67,6 +69,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [currentToolProgress, setCurrentToolProgress] = useState<ToolProgress | null>(null);
   const [generatedCategories, setGeneratedCategories] = useState<GeneratedCategory[]>([]);
   const [photoAnalysis, setPhotoAnalysis] = useState<PhotoAnalysis | null>(null);
+  const [isAutoPilot, setIsAutoPilot] = useState(false);
+  const autoPilotIterationsRef = useRef(0);
+  const MAX_AUTO_PILOT_ITERATIONS = 6;
 
   const photoAnalysisRef = useRef<PhotoAnalysis>(FALLBACK_ANALYSIS);
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -117,6 +122,42 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }
   }, []);
 
+  // Handle generate_transformations tool results — merge for expand, replace for refresh
+  const handleTransformationResult = useCallback((result: ToolResult) => {
+    if (!result.success || !result.data) return;
+    const newCategories = result.data.categories as GeneratedCategory[];
+    const mode = result.data.mode as string;
+    if (!newCategories) return;
+
+    if (mode === 'expand') {
+      // Merge: keep existing, add new categories/options
+      setGeneratedCategories((prev) => {
+        const merged = [...prev];
+        for (const newCat of newCategories) {
+          const existing = merged.find((c) => c.name === newCat.name);
+          if (existing) {
+            // Add new transformations that don't already exist
+            for (const t of newCat.transformations) {
+              if (!existing.transformations.some((et) => et.id === t.id)) {
+                existing.transformations.push(t);
+              }
+            }
+          } else {
+            merged.push(newCat);
+          }
+        }
+        return merged;
+      });
+    } else {
+      setGeneratedCategories(newCategories);
+    }
+
+    const recommended = result.data.recommendedCategory as string;
+    if (recommended) {
+      onCategoryRecommended?.(recommended);
+    }
+  }, [onCategoryRecommended]);
+
   const buildToolContext = useCallback((): MakeoverToolContext => ({
     generateFromPrompt,
     getOriginalImageBase64: () => originalImageBase64,
@@ -151,7 +192,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           think: false,
         });
         // SDK ChatStream yields { content, ... } directly (not OpenAI choices format)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for await (const chunk of stream as AsyncIterable<{ content?: string }>) {
           if (chunk.content) content += chunk.content;
         }
@@ -163,6 +203,24 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     getPhotoAnalysis: () => photoAnalysisRef.current,
     getCurrentCategories: () => generatedCategoriesRef.current,
   }), [sogniClient, originalImageBase64, originalImageUrl, getCurrentResultUrl, getEditStack, getEditStackDepth, isGenerating, generateFromPrompt]);
+
+  // Refs + drain logic for queuing auto-analysis that arrives while streaming
+  const pendingAnalysisRef = useRef<{ transformation: { name: string; prompt: string }; resultUrl: string } | null>(null);
+  const isAutoAnalyzingRef = useRef(false); // Prevents re-triggering analysis loop
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
+
+  const drainPendingAnalysis = useCallback(() => {
+    if (!isStreamingRef.current && pendingAnalysisRef.current) {
+      const pending = pendingAnalysisRef.current;
+      pendingAnalysisRef.current = null;
+      // Deferred call — notifyGenerationComplete is defined below, accessed via ref
+      notifyGenerationCompleteRef.current?.(pending.transformation, pending.resultUrl);
+    }
+  }, []);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const notifyGenerationCompleteRef = useRef<any>(null);
 
   const sendMessage = useCallback(async (text: string) => {
     if (isStreaming) return;
@@ -191,7 +249,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     try {
       const toolContext = buildToolContext();
 
-      const updatedHistory = await sendChatMessage(
+      await sendChatMessage(
         text,
         messagesRef.current,
         photoAnalysisRef.current,
@@ -199,6 +257,26 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         {
           onToken: (token) => {
             enqueueToken(token);
+          },
+          onNewAssistantMessage: () => {
+            // Flush current tokens, finalize current bubble, start a new one
+            flushTokenQueue();
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              const finalized = last?.isStreaming
+                ? [...prev.slice(0, -1), { ...last, isStreaming: false }]
+                : prev;
+              return [
+                ...finalized,
+                {
+                  id: `msg-${Date.now()}-round`,
+                  role: 'assistant' as const,
+                  content: '',
+                  timestamp: Date.now(),
+                  isStreaming: true,
+                },
+              ];
+            });
           },
           onToolCallStart: (toolCall) => {
             setCurrentToolProgress({
@@ -214,17 +292,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               message: result.success ? 'Done!' : (result.error || 'Failed'),
             });
 
-            // If generate_transformations succeeded, update the grid
-            if (toolCall.name === 'generate_transformations' && result.success && result.data) {
-              const categories = result.data.categories as GeneratedCategory[];
-              if (categories) {
-                setGeneratedCategories(categories);
-              }
-              // Preselect recommended category
-              const recommended = result.data.recommendedCategory as string;
-              if (recommended) {
-                onCategoryRecommended?.(recommended);
-              }
+            if (toolCall.name === 'generate_transformations') {
+              handleTransformationResult(result);
             }
 
             // Clear progress after a delay
@@ -251,8 +320,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         sogniClient
       );
 
-      // Final update
-      setMessages(updatedHistory.map((m) => ({ ...m, isStreaming: false })));
     } catch (error) {
       console.error('[useChat] Error:', error);
       setMessages((prev) => {
@@ -271,8 +338,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       });
     } finally {
       setIsStreaming(false);
+      // Process any queued auto-analysis that arrived while streaming
+      setTimeout(() => drainPendingAnalysis(), 0);
     }
-  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue]);
+  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, drainPendingAnalysis, handleTransformationResult]);
 
   const initWithPhoto = useCallback(async (imageUrl: string) => {
     // Run photo analysis
@@ -306,7 +375,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             enqueueToken(token);
           },
           onToolCallStart: () => {},
-          onToolCallComplete: () => {},
+          onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
+            if (toolCall.name === 'generate_transformations') {
+              handleTransformationResult(result);
+            }
+          },
           onComplete: (finalHistory) => {
             flushTokenQueue();
             setMessages(finalHistory.map((m) => ({ ...m, isStreaming: false })));
@@ -340,7 +413,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } finally {
       setIsStreaming(false);
     }
-  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue]);
+  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, handleTransformationResult]);
 
   const notifyTransformationSelected = useCallback((transformation: GeneratedTransformation) => {
     // Add an informational message to chat history (no LLM invocation).
@@ -356,10 +429,32 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     ]);
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const notifyGenerationComplete = useCallback(async (transformation: { name: string; prompt: string }, _resultUrl: string) => {
-    if (isStreaming) return;
+  const notifyGenerationComplete = useCallback(async (transformation: { name: string; prompt: string }, resultUrl: string) => {
+    if (isStreaming) {
+      // Queue the notification to process when streaming finishes
+      pendingAnalysisRef.current = { transformation, resultUrl };
+      return;
+    }
+    // Prevent re-triggering if a generation happens during analysis (e.g. LLM calls generate_makeover)
+    if (isAutoAnalyzingRef.current) return;
+
+    // Track auto-pilot iterations — stop if limit reached
+    if (isAutoPilot) {
+      autoPilotIterationsRef.current++;
+      if (autoPilotIterationsRef.current > MAX_AUTO_PILOT_ITERATIONS) {
+        setIsAutoPilot(false);
+        autoPilotIterationsRef.current = 0;
+      }
+    }
+
+    isAutoAnalyzingRef.current = true;
     setIsStreaming(true);
+
+    const remaining = MAX_AUTO_PILOT_ITERATIONS - autoPilotIterationsRef.current;
+    const autoPilotConfig: AutoPilotConfig = {
+      enabled: isAutoPilot && remaining > 0,
+      remainingIterations: remaining,
+    };
 
     const syntheticMessage = `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze. Give me your take on how it turned out and refresh my options.]`;
 
@@ -378,7 +473,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     try {
       const toolContext = buildToolContext();
-      const updatedHistory = await sendChatMessage(
+      await sendChatMessage(
         syntheticMessage,
         messagesRef.current,
         photoAnalysisRef.current,
@@ -386,6 +481,25 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         {
           onToken: (token) => {
             enqueueToken(token);
+          },
+          onNewAssistantMessage: () => {
+            flushTokenQueue();
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              const finalized = last?.isStreaming
+                ? [...prev.slice(0, -1), { ...last, isStreaming: false }]
+                : prev;
+              return [
+                ...finalized,
+                {
+                  id: `msg-${Date.now()}-round`,
+                  role: 'assistant' as const,
+                  content: '',
+                  timestamp: Date.now(),
+                  isStreaming: true,
+                },
+              ];
+            });
           },
           onToolCallStart: (toolCall) => {
             setCurrentToolProgress({
@@ -401,17 +515,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               message: result.success ? 'Done!' : (result.error || 'Failed'),
             });
 
-            // If generate_transformations succeeded, update the grid
-            if (toolCall.name === 'generate_transformations' && result.success && result.data) {
-              const categories = result.data.categories as GeneratedCategory[];
-              if (categories) {
-                setGeneratedCategories(categories);
-              }
-              // Preselect recommended category
-              const recommended = result.data.recommendedCategory as string;
-              if (recommended) {
-                onCategoryRecommended?.(recommended);
-              }
+            if (toolCall.name === 'generate_transformations') {
+              handleTransformationResult(result);
             }
 
             // Clear progress after a delay
@@ -438,24 +543,30 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             });
           },
         },
-        sogniClient
+        sogniClient,
+        autoPilotConfig
       );
 
-      // Final update — filter synthetic message
-      const filtered = updatedHistory
-        .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
-        .map((m) => ({ ...m, isStreaming: false }));
-      setMessages(filtered);
     } catch (error) {
       console.error('[useChat] Auto-analysis error:', error);
     } finally {
+      isAutoAnalyzingRef.current = false;
       setIsStreaming(false);
     }
-  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, onCategoryRecommended]);
+  }, [isStreaming, isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult]);
+
+  // Keep notifyGenerationComplete ref current for deferred drain calls
+  notifyGenerationCompleteRef.current = notifyGenerationComplete;
 
   const openChat = useCallback(() => setIsChatOpen(true), []);
   const closeChat = useCallback(() => setIsChatOpen(false), []);
   const toggleChat = useCallback(() => setIsChatOpen((prev) => !prev), []);
+  const toggleAutoPilot = useCallback(() => {
+    setIsAutoPilot((prev) => {
+      if (prev) autoPilotIterationsRef.current = 0; // Reset counter when turning off
+      return !prev;
+    });
+  }, []);
 
   return {
     messages,
@@ -464,10 +575,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     currentToolProgress,
     generatedCategories,
     photoAnalysis,
+    isAutoPilot,
     sendMessage,
     openChat,
     closeChat,
     toggleChat,
+    toggleAutoPilot,
     notifyTransformationSelected,
     notifyGenerationComplete,
     initWithPhoto,

@@ -131,7 +131,7 @@ export async function generateTransformations(
         stream: true,
         tokenType: 'spark',
         temperature: 0.8,
-        max_tokens: 2000,
+        max_tokens: 4000,
         think: false,
       });
 

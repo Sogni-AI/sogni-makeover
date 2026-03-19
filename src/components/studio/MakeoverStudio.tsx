@@ -138,6 +138,24 @@ function MakeoverStudio() {
     chat.toggleChat();
   }, [chat]);
 
+  const handleChatSelectCategory = useCallback((categoryName: string) => {
+    setSelectedCategory(categoryName);
+  }, []);
+
+  const handleChatHighlightTransformation = useCallback((transformationName: string) => {
+    // Find which category contains this transformation by name and select it
+    const category = generatedCategories.find(c =>
+      c.transformations.some(t => t.name === transformationName)
+    );
+    if (category) {
+      setSelectedCategory(category.name);
+      const transformation = category.transformations.find(t => t.name === transformationName);
+      if (transformation) {
+        setActiveTransformationId(transformation.id);
+      }
+    }
+  }, [generatedCategories]);
+
   // Redirect to capture if no image is loaded
   useEffect(() => {
     if (!originalImageUrl) {
@@ -297,6 +315,26 @@ function MakeoverStudio() {
                     </div>
                   )}
 
+                  {/* Auto-Pilot toggle */}
+                  <label className="group relative flex cursor-pointer items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={chat.isAutoPilot}
+                      onChange={chat.toggleAutoPilot}
+                      className="peer sr-only"
+                    />
+                    <div className="h-4 w-7 rounded-full bg-white/10 transition-colors after:absolute after:left-[2px] after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-3 after:rounded-full after:bg-white/40 after:transition-all peer-checked:bg-primary-400/30 peer-checked:after:translate-x-3 peer-checked:after:bg-primary-300" />
+                    <span className="text-[10px] font-medium text-white/35 transition-colors peer-checked:text-primary-300/70">
+                      Auto-Pilot
+                    </span>
+                    <span
+                      className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/5 text-[8px] font-bold text-white/25 transition-colors hover:bg-white/10 hover:text-white/40"
+                      title="Let your stylist iterate automatically on your look for up to 6 transformations. The stylist will analyze each result, refresh the options, and apply the next look it recommends."
+                    >
+                      i
+                    </span>
+                  </label>
+
                   {/* Chat toggle button */}
                   <button
                     onClick={handleToggleChat}
@@ -334,17 +372,8 @@ function MakeoverStudio() {
           currentToolProgress={chat.currentToolProgress}
           onSendMessage={chat.sendMessage}
           onClose={chat.closeChat}
-          onSelectCategory={(categoryName: string) => setSelectedCategory(categoryName)}
-          onHighlightTransformation={(transformationId: string) => {
-            // Find which category contains this transformation and select it
-            const category = generatedCategories.find(c =>
-              c.transformations.some(t => t.id === transformationId || t.name === transformationId)
-            );
-            if (category) {
-              setSelectedCategory(category.name);
-              setActiveTransformationId(transformationId);
-            }
-          }}
+          onSelectCategory={handleChatSelectCategory}
+          onHighlightTransformation={handleChatHighlightTransformation}
         />
       </div>
     </motion.div>

@@ -104,7 +104,7 @@ function ChatPanel({
             <img
               src="/images/mascot.png"
               alt="Stylist"
-              className="pointer-events-none absolute bottom-full -right-4 w-3/4 max-w-[200px]"
+              className="pointer-events-none absolute bottom-full right-0 w-1/3 max-w-[100px] md:right-0 md:w-3/4 md:max-w-[200px]"
             />
             <div className="relative z-10">
               <ChatInput

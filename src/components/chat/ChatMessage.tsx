@@ -118,8 +118,8 @@ function ChatMessage({ message, toolProgress, onSelectCategory, onSelectTransfor
       <div
         className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
           isUser
-            ? 'bg-primary-400/15 text-primary-100'
-            : 'bg-surface-800/60 text-white/80'
+            ? 'bg-primary-400/20 text-primary-100'
+            : 'bg-surface-800/80 text-white/80'
         }`}
       >
         {message.content ? parseMessageContent(message.content, onSelectCategory, onSelectTransformation) : (message.isStreaming ? (

@@ -36,7 +36,7 @@ async function handler(
       currentLook,
       currentCategories: context.getCurrentCategories(),
     });
-    return { success: true, data: { categories: result.categories, recommendedCategory: result.recommendedCategory } };
+    return { success: true, data: { categories: result.categories, recommendedCategory: result.recommendedCategory, mode } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }

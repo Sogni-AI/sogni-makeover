@@ -14,7 +14,16 @@ import '@/tools';
 const CHAT_MODEL = 'qwen3.5-35b-a3b-gguf-q4km';
 const MAX_TOOL_ROUNDS = 5;
 
-function buildSystemPrompt(photoAnalysis: PhotoAnalysis): string {
+export interface AutoPilotConfig {
+  enabled: boolean;
+  remainingIterations: number;
+}
+
+function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotConfig): string {
+  const autoPilotRule = autoPilot?.enabled && autoPilot.remainingIterations > 0
+    ? `- AUTO-PILOT MODE is ON with ${autoPilot.remainingIterations} iterations remaining. After analyzing the result and refreshing the grid, you SHOULD call generate_makeover to apply the transformation you're most excited about. Pick bold, complementary changes that build on the current look. Keep the momentum going!`
+    : `- NEVER call generate_makeover during post-generation analysis. The client picks their next look from the grid — you suggest, they choose. Do NOT auto-apply transformations.`;
+
   return `You are an eccentric legendary Hollywood stylist to the stars. A new client just sat down in your chair and you've studied their look. You're playful, a bit cheeky, and confidently opinionated — but always gassing up your client. You live for a good transformation.
 
 Your job:
@@ -38,6 +47,7 @@ Post-generation behavior (MANDATORY every time a makeover completes):
 4. In your final response, reference the new categories and options using bracket syntax: [category:Category Name] and [option:Option Name]
 5. Tell the client which category you're most excited about and suggest a specific next step
 6. When the client asks for "more options", call generate_transformations with mode "expand" to add to the existing grid
+${autoPilotRule}
 
 Client analysis:
 ${JSON.stringify(photoAnalysis, null, 2)}`;
@@ -58,11 +68,12 @@ export async function sendChatMessage(
   toolContext: MakeoverToolContext,
   callbacks: ChatStreamCallbacks,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sogniClient?: any
+  sogniClient?: any,
+  autoPilot?: AutoPilotConfig
 ): Promise<ChatMessage[]> {
   const systemMessage = {
     role: 'system' as const,
-    content: buildSystemPrompt(photoAnalysis),
+    content: buildSystemPrompt(photoAnalysis, autoPilot),
   };
 
   // Build messages for LLM (strip UI-only fields)
@@ -99,6 +110,11 @@ export async function sendChatMessage(
 
   while (roundCount < MAX_TOOL_ROUNDS) {
     roundCount++;
+
+    // Signal the UI to create a new streaming bubble for each round after the first
+    if (roundCount > 1) {
+      callbacks.onNewAssistantMessage?.();
+    }
 
     let assistantContent = '';
     let toolCalls: ToolCall[] = [];
