@@ -27,7 +27,7 @@
     "deploy:staging": "bash scripts/deploy-staging.sh"
   },
   "dependencies": {
-    "@sogni-ai/sogni-client": "4.0.0-alpha.66",
+    "@sogni-ai/sogni-client": "^4.1.0-alpha.5",
     "@types/uuid": "^10.0.0",
     "concurrently": "^8.2.2",
     "framer-motion": "^12.9.2",

@@ -9,7 +9,7 @@
     "dev": "npx kill-port 3003 && nodemon index.js"
   },
   "dependencies": {
-    "@sogni-ai/sogni-client": "4.0.0-alpha.66",
+    "@sogni-ai/sogni-client": "^4.1.0-alpha.5",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
