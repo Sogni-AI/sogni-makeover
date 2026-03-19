@@ -31,10 +31,10 @@ function ChatPanel({
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on new messages
+  // Auto-scroll when a new message is added (not on every streaming token)
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages.length]);
 
   // Get suggestions from the latest assistant message or use defaults
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isStreaming);

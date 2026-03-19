@@ -301,10 +301,18 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   }, [sogniClient, buildToolContext]);
 
   const notifyTransformationSelected = useCallback((transformation: GeneratedTransformation) => {
-    // Notify the chat that the user clicked a grid card
-    const msg = `I want to try "${transformation.name}"`;
-    sendMessage(msg);
-  }, [sendMessage]);
+    // Add an informational message to chat history (no LLM invocation).
+    // The grid click triggers generateMakeover directly — this just keeps the chat in context.
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `msg-${Date.now()}-grid`,
+        role: 'user' as const,
+        content: `I want to try "${transformation.name}"`,
+        timestamp: Date.now(),
+      },
+    ]);
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const notifyGenerationComplete = useCallback((_resultUrl: string) => {

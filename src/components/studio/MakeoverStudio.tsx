@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import type { GeneratedTransformation } from '@/types/chat';
-import type { UseChatReturn } from '@/hooks/useChat';
+import { useChat } from '@/hooks/useChat';
 import CategoryNav from '@/components/studio/CategoryNav';
 import TransformationPicker from '@/components/studio/TransformationPicker';
 import EditHistoryCarousel from '@/components/studio/EditHistoryCarousel';
@@ -14,25 +14,10 @@ import { useWallet } from '@/hooks/useWallet';
 import { formatTokenAmount, getTokenLabel } from '@/services/walletService';
 import '@/styles/studio.css';
 
-/**
- * MakeoverStudio integrates the chat panel with the existing studio layout.
- *
- * The chat hook (useChat) is expected to be initialized by a parent component
- * and passed in as a prop. This keeps the hook lifecycle outside the studio
- * so it can be initialized when the photo is first captured.
- *
- * For the Stream D stub, we use a minimal inline chat state until Stream C
- * provides the real useChat hook. The component is structured to accept
- * a UseChatReturn object.
- */
-
-interface MakeoverStudioProps {
-  chat?: UseChatReturn;
-}
-
-function MakeoverStudio({ chat }: MakeoverStudioProps) {
+function MakeoverStudio() {
   const {
     originalImageUrl,
+    originalImageBase64,
     setCurrentView,
     resetPhoto,
     isGenerating,
@@ -40,6 +25,7 @@ function MakeoverStudio({ chat }: MakeoverStudioProps) {
     setGenerationProgress,
     cancelGeneration,
     generateMakeover,
+    generateFromPrompt,
     currentTransformation,
     authState,
     demoGenerationsRemaining,
@@ -48,17 +34,50 @@ function MakeoverStudio({ chat }: MakeoverStudioProps) {
     isEnhancing,
     cancelEnhancement,
     editStack,
+    sogniClient,
   } = useApp();
 
   const { tokenCost, usdCost, isLoading: costLoading } = useMakeoverCostEstimate();
   const { tokenType } = useWallet();
 
-  // Use generated categories from chat, or empty array as fallback
-  const generatedCategories = chat?.generatedCategories ?? [];
-  const isCategoriesLoading = chat ? chat.isStreaming && generatedCategories.length === 0 : false;
+  // Stable function refs for useChat to avoid stale closures
+  const editStackRef = useRef(editStack);
+  editStackRef.current = editStack;
+  const isGeneratingRef = useRef(isGenerating);
+  isGeneratingRef.current = isGenerating;
+  const currentResultUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    const step = editStack.currentStep;
+    currentResultUrlRef.current = step?.resultImageUrl ?? null;
+  }, [editStack.currentStep]);
+
+  // Initialize chat hook
+  const chat = useChat({
+    sogniClient,
+    originalImageUrl,
+    originalImageBase64,
+    getCurrentResultUrl: () => currentResultUrlRef.current,
+    getEditStack: () => editStackRef.current.steps,
+    getEditStackDepth: () => editStackRef.current.stepCount,
+    isGenerating: () => isGeneratingRef.current,
+    generateFromPrompt,
+  });
+
+  // Use generated categories from chat
+  const generatedCategories = chat.generatedCategories;
+  const isCategoriesLoading = chat.isStreaming && generatedCategories.length === 0;
 
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [activeTransformationId, setActiveTransformationId] = useState<string | null>(null);
+
+  // Trigger photo analysis + AI greeting when studio mounts with a photo
+  const initTriggered = useRef(false);
+  useEffect(() => {
+    if (originalImageUrl && !initTriggered.current) {
+      initTriggered.current = true;
+      chat.initWithPhoto(originalImageUrl);
+    }
+  }, [originalImageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selected category when categories arrive
   useEffect(() => {
@@ -75,12 +94,10 @@ function MakeoverStudio({ chat }: MakeoverStudioProps) {
     (transformation: GeneratedTransformation) => {
       setActiveTransformationId(transformation.id);
 
-      // Notify the chat that a grid card was clicked
-      if (chat) {
-        chat.notifyTransformationSelected(transformation);
-      }
+      // Add informational message to chat (no LLM invocation)
+      chat.notifyTransformationSelected(transformation);
 
-      // Also trigger generation directly via the existing pipeline
+      // Trigger generation directly via the existing pipeline
       generateMakeover({
         id: transformation.id,
         name: transformation.name,
@@ -100,9 +117,7 @@ function MakeoverStudio({ chat }: MakeoverStudioProps) {
   }, [resetPhoto]);
 
   const handleToggleChat = useCallback(() => {
-    if (chat) {
-      chat.toggleChat();
-    }
+    chat.toggleChat();
   }, [chat]);
 
   // Redirect to capture if no image is loaded
@@ -265,21 +280,19 @@ function MakeoverStudio({ chat }: MakeoverStudioProps) {
                   )}
 
                   {/* Chat toggle button */}
-                  {chat && (
-                    <button
-                      onClick={handleToggleChat}
-                      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                        chat.isChatOpen
-                          ? 'bg-primary-400/15 text-primary-300'
-                          : 'text-white/35 hover:bg-primary-400/[0.06] hover:text-white/60'
-                      }`}
-                      aria-label={chat.isChatOpen ? 'Close chat' : 'Open chat'}
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-                      </svg>
-                    </button>
-                  )}
+                  <button
+                    onClick={handleToggleChat}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                      chat.isChatOpen
+                        ? 'bg-primary-400/15 text-primary-300'
+                        : 'text-white/35 hover:bg-primary-400/[0.06] hover:text-white/60'
+                    }`}
+                    aria-label={chat.isChatOpen ? 'Close chat' : 'Open chat'}
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -296,16 +309,14 @@ function MakeoverStudio({ chat }: MakeoverStudioProps) {
         </div>
 
         {/* Chat panel (slides in from right) */}
-        {chat && (
-          <ChatPanel
-            messages={chat.messages}
-            isStreaming={chat.isStreaming}
-            isChatOpen={chat.isChatOpen}
-            currentToolProgress={chat.currentToolProgress}
-            onSendMessage={chat.sendMessage}
-            onClose={chat.closeChat}
-          />
-        )}
+        <ChatPanel
+          messages={chat.messages}
+          isStreaming={chat.isStreaming}
+          isChatOpen={chat.isChatOpen}
+          currentToolProgress={chat.currentToolProgress}
+          onSendMessage={chat.sendMessage}
+          onClose={chat.closeChat}
+        />
       </div>
     </motion.div>
   );
