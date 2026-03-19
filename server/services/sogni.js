@@ -887,63 +887,63 @@ Return JSON with your professional assessment:
 Focus on: apparent gender, age range, hair (color/length/style), skin tone, facial hair, glasses, distinctive visible features. Do NOT mention clothing or background. The stylistNotes should be your candid professional read — what excites you about this client's potential.`;
 
 export async function analyzePhotoSubject(imageBase64DataUri) {
-  const client = await getOrCreateGlobalSogniClient();
+  return withSogniClient(async (client) => {
+    const messages = [
+      { role: 'system', content: SUBJECT_ANALYSIS_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: imageBase64DataUri } },
+          { type: 'text', text: 'Describe the main subject of this portrait.' },
+        ],
+      },
+    ];
 
-  const messages = [
-    { role: 'system', content: SUBJECT_ANALYSIS_SYSTEM_PROMPT },
-    {
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: imageBase64DataUri } },
-        { type: 'text', text: 'Describe the main subject of this portrait.' },
-      ],
-    },
-  ];
+    let fullContent = '';
+    const stream = await client.chat.completions.create({
+      model: SUBJECT_ANALYSIS_MODEL,
+      messages,
+      stream: true,
+      tokenType: 'spark',
+      temperature: 0.1,
+      top_p: 0.9,
+      max_tokens: 300,
+      think: false,
+    });
 
-  let fullContent = '';
-  const stream = await client.chat.completions.create({
-    model: SUBJECT_ANALYSIS_MODEL,
-    messages,
-    stream: true,
-    tokenType: 'spark',
-    temperature: 0.1,
-    top_p: 0.9,
-    max_tokens: 300,
-    think: false,
-  });
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (delta) fullContent += delta;
+    }
 
-  for await (const chunk of stream) {
-    const delta = chunk.choices?.[0]?.delta?.content;
-    if (delta) fullContent += delta;
-  }
+    // Parse JSON, handling markdown code fences
+    let cleaned = fullContent.trim();
+    const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) cleaned = fenceMatch[1].trim();
 
-  // Parse JSON, handling markdown code fences
-  let cleaned = fullContent.trim();
-  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) cleaned = fenceMatch[1].trim();
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    return {
-      subjectCount: typeof parsed.subjectCount === 'number' ? parsed.subjectCount : 1,
-      subjectDescription: typeof parsed.subjectDescription === 'string' ? parsed.subjectDescription : 'the person',
-      perceivedGender: ['male', 'female'].includes(parsed.perceivedGender) ? parsed.perceivedGender : null,
-      genderConfidence: ['high', 'medium', 'low'].includes(parsed.genderConfidence) ? parsed.genderConfidence : 'low',
-      estimatedAgeRange: typeof parsed.estimatedAgeRange === 'string' ? parsed.estimatedAgeRange : null,
-      features: parsed.features || {},
-      stylistNotes: typeof parsed.stylistNotes === 'string' ? parsed.stylistNotes : '',
-    };
-  } catch {
-    return {
-      subjectCount: 1,
-      subjectDescription: 'the person',
-      perceivedGender: null,
-      genderConfidence: 'low',
-      estimatedAgeRange: null,
-      features: {},
-      stylistNotes: '',
-    };
-  }
+    try {
+      const parsed = JSON.parse(cleaned);
+      return {
+        subjectCount: typeof parsed.subjectCount === 'number' ? parsed.subjectCount : 1,
+        subjectDescription: typeof parsed.subjectDescription === 'string' ? parsed.subjectDescription : 'the person',
+        perceivedGender: ['male', 'female'].includes(parsed.perceivedGender) ? parsed.perceivedGender : null,
+        genderConfidence: ['high', 'medium', 'low'].includes(parsed.genderConfidence) ? parsed.genderConfidence : 'low',
+        estimatedAgeRange: typeof parsed.estimatedAgeRange === 'string' ? parsed.estimatedAgeRange : null,
+        features: parsed.features || {},
+        stylistNotes: typeof parsed.stylistNotes === 'string' ? parsed.stylistNotes : '',
+      };
+    } catch {
+      return {
+        subjectCount: 1,
+        subjectDescription: 'the person',
+        perceivedGender: null,
+        genderConfidence: 'low',
+        estimatedAgeRange: null,
+        features: {},
+        stylistNotes: '',
+      };
+    }
+  }, 'photo subject analysis');
 }
 
 // ---------------------------------------------------------------------------
@@ -953,24 +953,24 @@ export async function analyzePhotoSubject(imageBase64DataUri) {
 const CHAT_MODEL = 'qwen3.5-35b-a3b-gguf-q4km';
 
 export async function chatCompletion(messages, tools = []) {
-  const client = await getOrCreateGlobalSogniClient();
+  return withSogniClient(async (client) => {
+    const params = {
+      model: CHAT_MODEL,
+      messages,
+      stream: true,
+      tokenType: 'spark',
+      temperature: 0.7,
+      top_p: 0.9,
+      max_tokens: 500,
+      think: false,
+    };
 
-  const params = {
-    model: CHAT_MODEL,
-    messages,
-    stream: true,
-    tokenType: 'spark',
-    temperature: 0.7,
-    top_p: 0.9,
-    max_tokens: 500,
-    think: false,
-  };
+    if (tools.length > 0) {
+      params.tools = tools;
+    }
 
-  if (tools.length > 0) {
-    params.tools = tools;
-  }
-
-  return client.chat.completions.create(params);
+    return client.chat.completions.create(params);
+  }, 'chat completion');
 }
 
 // Client info for debugging

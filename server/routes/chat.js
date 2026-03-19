@@ -3,10 +3,10 @@ import { chatCompletion } from '../services/sogni.js';
 
 const router = express.Router();
 
-// Origin validation: only allow *.sogni.ai
+// Origin validation: only allow *.sogni.ai (block missing origin)
 function validateOrigin(req, res, next) {
-  const origin = req.get('origin') || '';
-  if (origin && !origin.match(/\.sogni\.ai(:\d+)?$/)) {
+  const origin = req.get('origin') || req.get('referer') || '';
+  if (!origin || !origin.match(/^https?:\/\/[^/]*\.sogni\.ai(:\d+)?(\/|$)/)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   next();
@@ -22,16 +22,27 @@ router.post('/completions', async (req, res) => {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
+  if (tools && !Array.isArray(tools)) {
+    return res.status(400).json({ error: 'tools must be an array' });
+  }
+
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  // Safety timeout (2 minutes)
+  const timeout = setTimeout(() => {
+    res.write(`event: error\ndata: ${JSON.stringify({ message: 'Request timeout', code: 'timeout' })}\n\n`);
+    res.end();
+  }, 120000);
+
   try {
     const stream = await chatCompletion(messages, tools || []);
 
     let toolCalls = [];
+    let completeSent = false;
 
     for await (const chunk of stream) {
       const choice = chunk.choices?.[0];
@@ -68,7 +79,13 @@ router.post('/completions', async (req, res) => {
           finishReason: choice.finish_reason,
           usage: chunk.usage || null,
         })}\n\n`);
+        completeSent = true;
       }
+    }
+
+    // Send synthetic complete if stream ended without finish_reason
+    if (!completeSent) {
+      res.write(`event: complete\ndata: ${JSON.stringify({ finishReason: 'stop', usage: null })}\n\n`);
     }
   } catch (error) {
     console.error('[Chat] Error:', error);
@@ -77,6 +94,7 @@ router.post('/completions', async (req, res) => {
       code: 'chat_error',
     })}\n\n`);
   } finally {
+    clearTimeout(timeout);
     res.end();
   }
 });
