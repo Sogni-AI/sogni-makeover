@@ -1,16 +1,14 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import type { TransformationCategory, Transformation, Gender } from '@/types';
-import { CATEGORIES, getSubcategoriesForGender, getTransformationsBySubcategory } from '@/constants/transformations';
+import type { GeneratedTransformation, GeneratedCategory } from '@/types/chat';
 
 interface TransformationPickerProps {
-  category: TransformationCategory;
-  selectedSubcategory: string;
-  onSelectSubcategory: (subcategory: string) => void;
-  onSelectTransformation: (transformation: Transformation) => void;
+  categories: GeneratedCategory[];
+  selectedCategory: string;
+  onSelectTransformation: (transformation: GeneratedTransformation) => void;
   isDisabled: boolean;
   activeTransformationId: string | null;
-  gender: Gender | null;
+  isLoading: boolean;
 }
 
 const gridContainerVariants = {
@@ -26,53 +24,43 @@ const gridItemVariants = {
 };
 
 function TransformationPicker({
-  category,
-  selectedSubcategory,
-  onSelectSubcategory,
+  categories,
+  selectedCategory,
   onSelectTransformation,
   isDisabled,
   activeTransformationId,
-  gender,
+  isLoading,
 }: TransformationPickerProps) {
-  const subcategories = useMemo(
-    () => getSubcategoriesForGender(category, gender),
-    [category, gender],
-  );
-  const transformations = useMemo(
-    () => getTransformationsBySubcategory(category, selectedSubcategory, gender),
-    [category, selectedSubcategory, gender],
+  const category = useMemo(
+    () => categories.find((c) => c.name === selectedCategory),
+    [categories, selectedCategory]
   );
 
-  if (!CATEGORIES[category]) return null;
+  const transformations = category?.transformations || [];
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-0 flex-col">
+        <div className="transformation-grid">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="transformation-card flex flex-col items-center gap-2 p-3">
+              <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
+              <div className="h-3 w-16 animate-pulse rounded bg-white/5" />
+              <div className="h-2 w-24 animate-pulse rounded bg-white/5" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-col">
-      {/* Subcategory tabs */}
-      <div className="subcategory-tabs flex-shrink-0">
-        {subcategories.map((sub: { id: string; name: string; icon: string }) => {
-          const isActive = selectedSubcategory === sub.id;
-          return (
-            <button
-              key={sub.id}
-              onClick={() => onSelectSubcategory(sub.id)}
-              className={`relative flex-shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                isActive
-                  ? 'bg-primary-400/10 text-primary-300'
-                  : 'text-white/35 hover:bg-primary-400/[0.04] hover:text-white/50'
-              }`}
-            >
-              <span className="mr-1">{sub.icon}</span>
-              {sub.name}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Transformation grid (scrollable) */}
       <div className="min-h-0 flex-1 overflow-y-auto md:overflow-y-hidden md:overflow-x-auto">
         {transformations.length > 0 ? (
           <motion.div
-            key={`${category}-${selectedSubcategory}`}
+            key={selectedCategory}
             variants={gridContainerVariants}
             initial="hidden"
             animate="visible"
@@ -94,6 +82,11 @@ function TransformationPicker({
                 >
                   <span className="text-2xl">{transformation.icon}</span>
                   <span className="text-xs font-medium leading-tight">{transformation.name}</span>
+                  {transformation.pitch && (
+                    <span className="mt-0.5 text-[10px] leading-tight text-white/30 line-clamp-2">
+                      {transformation.pitch}
+                    </span>
+                  )}
                 </motion.button>
               );
             })}
@@ -101,7 +94,7 @@ function TransformationPicker({
         ) : (
           <div className="flex items-center justify-center p-12">
             <p className="text-sm text-white/25">
-              No transformations available for this subcategory.
+              Tell your stylist what you're looking for to see personalized options.
             </p>
           </div>
         )}

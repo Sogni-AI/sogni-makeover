@@ -1,32 +1,43 @@
 import { motion } from 'framer-motion';
-import { CATEGORIES } from '@/constants/transformations';
-import type { TransformationCategory, Gender } from '@/types';
+import type { GeneratedCategory } from '@/types/chat';
 
 interface CategoryNavProps {
-  selectedCategory: TransformationCategory;
-  onSelectCategory: (category: TransformationCategory) => void;
-  gender: Gender | null;
+  categories: GeneratedCategory[];
+  selectedCategory: string;
+  onSelectCategory: (categoryName: string) => void;
+  isLoading: boolean;
 }
 
-function CategoryNav({ selectedCategory, onSelectCategory, gender }: CategoryNavProps) {
+function CategoryNav({ categories, selectedCategory, onSelectCategory, isLoading }: CategoryNavProps) {
+  if (isLoading) {
+    return (
+      <nav className="studio-sidebar" aria-label="Transformation categories">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="flex flex-col items-center gap-1 rounded-xl px-2 py-3">
+            <div className="h-6 w-6 animate-pulse rounded-lg bg-white/5" />
+            <div className="h-3 w-12 animate-pulse rounded bg-white/5" />
+          </div>
+        ))}
+      </nav>
+    );
+  }
+
   return (
     <nav className="studio-sidebar" aria-label="Transformation categories">
-      {(Object.entries(CATEGORIES) as [TransformationCategory, typeof CATEGORIES[TransformationCategory]][]).map(([key, category]) => {
-        const isActive = selectedCategory === key;
-        const displayName = (gender === 'male' && category.maleName) ? category.maleName : category.name;
-        const displayIcon = (gender === 'male' && category.maleIcon) ? category.maleIcon : category.icon;
+      {categories.map((category) => {
+        const isActive = selectedCategory === category.name;
         return (
           <motion.button
-            key={key}
+            key={category.name}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => onSelectCategory(key)}
+            onClick={() => onSelectCategory(category.name)}
             className={`relative flex flex-col items-center gap-1 rounded-xl px-2 py-3 text-center transition-all md:px-3 ${
               isActive
                 ? 'bg-primary-400/8 text-primary-300'
                 : 'text-white/35 hover:bg-primary-400/[0.04] hover:text-white/50'
             }`}
-            aria-label={displayName}
+            aria-label={category.name}
             aria-current={isActive ? 'true' : undefined}
           >
             {isActive && (
@@ -36,9 +47,9 @@ function CategoryNav({ selectedCategory, onSelectCategory, gender }: CategoryNav
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
               />
             )}
-            <span className="relative text-lg md:text-xl">{displayIcon}</span>
+            <span className="relative text-lg md:text-xl">{category.icon}</span>
             <span className="relative text-center text-[10px] font-medium leading-tight md:text-xs">
-              {displayName}
+              {category.name}
             </span>
           </motion.button>
         );

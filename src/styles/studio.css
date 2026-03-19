@@ -1,5 +1,11 @@
 /* Studio-specific layout styles */
 
+/* Studio layout with chat panel wrapper */
+.studio-layout-with-chat {
+  display: flex;
+  min-height: 0;
+}
+
 /* Studio main grid layout */
 .studio-layout {
   display: grid;
@@ -8,12 +14,30 @@
   gap: 0;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 @media (max-width: 767px) {
   .studio-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+  }
+}
+
+/* Chat panel within studio layout */
+.chat-panel {
+  width: 320px;
+  min-width: 280px;
+  max-width: 380px;
+}
+
+@media (max-width: 768px) {
+  .chat-panel {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 100%;
+    z-index: 50;
   }
 }
 
