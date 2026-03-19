@@ -103,9 +103,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           max_tokens: 300,
           think: false,
         });
-        for await (const chunk of stream) {
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (delta) content += delta;
+        // SDK ChatStream yields { content, ... } directly (not OpenAI choices format)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for await (const chunk of stream as AsyncIterable<{ content?: string }>) {
+          if (chunk.content) content += chunk.content;
         }
         return content;
       }

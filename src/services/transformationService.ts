@@ -102,9 +102,10 @@ export async function generateTransformations(
         think: false,
       });
 
-      for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta?.content;
-        if (delta) fullContent += delta;
+      // SDK ChatStream yields { content, ... } directly (not OpenAI choices format)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for await (const chunk of stream as AsyncIterable<{ content?: string }>) {
+        if (chunk.content) fullContent += chunk.content;
       }
 
       return parseCategories(fullContent);

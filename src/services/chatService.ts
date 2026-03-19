@@ -112,17 +112,16 @@ export async function sendChatMessage(
 
       const pendingToolCalls: Record<number, { id: string; name: string; arguments: string }> = {};
 
-      for await (const chunk of stream) {
-        const choice = chunk.choices?.[0];
-        if (!choice) continue;
-
-        if (choice.delta?.content) {
-          assistantContent += choice.delta.content;
-          callbacks.onToken(choice.delta.content);
+      // SDK ChatStream yields { content, tool_calls, finishReason } directly (not OpenAI choices format)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for await (const chunk of stream as AsyncIterable<{ content?: string; tool_calls?: any[] }>) {
+        if (chunk.content) {
+          assistantContent += chunk.content;
+          callbacks.onToken(chunk.content);
         }
 
-        if (choice.delta?.tool_calls) {
-          for (const tc of choice.delta.tool_calls) {
+        if (chunk.tool_calls) {
+          for (const tc of chunk.tool_calls) {
             const idx = tc.index ?? 0;
             if (!pendingToolCalls[idx]) {
               pendingToolCalls[idx] = { id: tc.id || '', name: '', arguments: '' };
@@ -131,6 +130,19 @@ export async function sendChatMessage(
             if (tc.function?.name) pendingToolCalls[idx].name = tc.function.name;
             if (tc.function?.arguments) pendingToolCalls[idx].arguments += tc.function.arguments;
           }
+        }
+      }
+
+      // Also check stream.toolCalls for accumulated tool calls (SDK accumulates them)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const streamObj = stream as any;
+      if (Object.keys(pendingToolCalls).length === 0 && streamObj.toolCalls?.length > 0) {
+        for (const tc of streamObj.toolCalls) {
+          pendingToolCalls[Object.keys(pendingToolCalls).length] = {
+            id: tc.id || '',
+            name: tc.function?.name || '',
+            arguments: tc.function?.arguments || '{}',
+          };
         }
       }
 

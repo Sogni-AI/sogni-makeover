@@ -55,7 +55,7 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
           {authState.isAuthenticated && (
             <button
               onClick={() => setShowReferral(true)}
-              className="rounded-full bg-gradient-to-r from-primary-400 to-primary-500 px-3 py-1 text-xs font-semibold text-surface-950 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-primary-400/30"
+              className="whitespace-nowrap rounded-full bg-gradient-to-r from-primary-400 to-primary-500 px-3 py-1 text-xs font-semibold text-surface-950 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-primary-400/30"
             >
               Share & Earn
             </button>
