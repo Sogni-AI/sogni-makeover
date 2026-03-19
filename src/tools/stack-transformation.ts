@@ -32,6 +32,10 @@ async function handler(
     return { success: false, error: 'No previous result to stack on. Use generate_makeover first.' };
   }
 
+  if (context.isGenerating()) {
+    return { success: false, error: 'A generation is already in progress' };
+  }
+
   try {
     const result = await context.generateFromPrompt({
       prompt,

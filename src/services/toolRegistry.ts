@@ -38,13 +38,14 @@ class ToolRegistry {
     }
 
     const timeoutMs = tool.timeout;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     try {
       const result = await Promise.race([
         tool.handler(args, context),
-        new Promise<ToolResult>((_, reject) =>
-          setTimeout(() => reject(new Error(`Tool ${name} timed out after ${timeoutMs / 1000}s`)), timeoutMs)
-        ),
+        new Promise<ToolResult>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(`Tool ${name} timed out after ${timeoutMs / 1000}s`)), timeoutMs);
+        }),
       ]);
       return result;
     } catch (error) {
@@ -52,6 +53,8 @@ class ToolRegistry {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       };
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
     }
   }
 }

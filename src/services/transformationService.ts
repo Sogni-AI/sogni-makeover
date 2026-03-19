@@ -123,6 +123,10 @@ export async function generateTransformations(
         credentials: 'include',
       });
 
+      if (!response.ok) {
+        throw new Error(`Transformation generation failed: ${response.status}`);
+      }
+
       // Read SSE stream
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');

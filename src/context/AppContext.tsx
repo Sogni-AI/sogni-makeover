@@ -189,6 +189,10 @@ export function AppProvider({ children }: AppProviderProps) {
     currentStepUrl: string | null;
   }>({ mode: 'stacked', currentStepBase64: null, currentStepUrl: null });
 
+  // Ref to capture the last generation result synchronously (for generateFromPrompt).
+  // React state updates are async, so we can't read currentResult right after generateMakeover.
+  const lastGenerationResultRef = useRef<{ resultUrl: string; projectId: string } | null>(null);
+
   editStackInputRef.current = {
     mode: editStack.mode,
     currentStepBase64: editStack.currentStep?.resultImageBase64 ?? null,
@@ -658,6 +662,9 @@ export function AppProvider({ children }: AppProviderProps) {
             duration,
           };
 
+          // Write to ref synchronously so generateFromPrompt can read it
+          lastGenerationResultRef.current = { resultUrl: resultImageUrl, projectId };
+
           setCurrentResult(result);
           setGenerationProgress({
             projectId,
@@ -873,6 +880,9 @@ export function AppProvider({ children }: AppProviderProps) {
                   cost: completeData.cost,
                 };
 
+                // Write to ref synchronously so generateFromPrompt can read it
+                lastGenerationResultRef.current = { resultUrl: result.imageUrl, projectId };
+
                 setCurrentResult(result);
                 setGenerationProgress({
                   projectId,
@@ -1003,6 +1013,8 @@ export function AppProvider({ children }: AppProviderProps) {
   /**
    * Simplified generation interface for chat tools.
    * Constructs a synthetic Transformation and delegates to generateMakeover.
+   * Uses editStackInputRef for synchronous mode switching (avoids React state race).
+   * Uses lastGenerationResultRef for synchronous result reading (avoids stale state).
    */
   const generateFromPrompt = useCallback(
     async (params: {
@@ -1011,13 +1023,12 @@ export function AppProvider({ children }: AppProviderProps) {
       negativePrompt?: string;
       useStackedInput?: boolean;
     }): Promise<{ resultUrl: string; projectId: string }> => {
-      // Temporarily switch edit stack mode if needed
-      const prevMode = editStack.mode;
-      if (params.useStackedInput) {
-        editStack.setMode('stacked');
-      } else {
-        editStack.setMode('original');
-      }
+      // Set edit stack mode via ref (synchronous, no React state race)
+      const prevMode = editStackInputRef.current.mode;
+      editStackInputRef.current.mode = params.useStackedInput ? 'stacked' : 'original';
+
+      // Clear previous result ref
+      lastGenerationResultRef.current = null;
 
       const syntheticTransformation: Transformation = {
         id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1032,22 +1043,12 @@ export function AppProvider({ children }: AppProviderProps) {
 
       await generateMakeover(syntheticTransformation);
 
-      // Restore edit stack mode
-      if (prevMode !== editStack.mode) {
-        editStack.setMode(prevMode);
-      }
+      // Restore edit stack mode via ref
+      editStackInputRef.current.mode = prevMode;
 
-      // Extract result from current state
-      // The result is set by generateMakeover via setCurrentResult
-      const stack = editStack.steps;
-      const latestStep = stack[stack.length - 1];
-
-      return {
-        resultUrl: latestStep?.resultImageUrl || '',
-        projectId: '',
-      };
+      // Read result from ref (written synchronously by generateMakeover)
+      return lastGenerationResultRef.current ?? { resultUrl: '', projectId: '' };
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- editStack methods are stable callbacks
     [generateMakeover],
   );
 

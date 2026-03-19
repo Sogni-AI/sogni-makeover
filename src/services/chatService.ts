@@ -148,6 +148,10 @@ export async function sendChatMessage(
         credentials: 'include',
       });
 
+      if (!response.ok) {
+        throw new Error(`Chat request failed: ${response.status}`);
+      }
+
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
@@ -206,7 +210,20 @@ export async function sendChatMessage(
       return updatedHistory;
     }
 
-    // Execute tool calls
+    // Build assistant message for LLM context (once, before tool execution loop)
+    const assistantLlmMsg = {
+      role: 'assistant' as const,
+      content: assistantContent,
+      tool_calls: toolCalls.map((tc) => ({
+        id: tc.id,
+        type: 'function' as const,
+        function: { name: tc.name, arguments: tc.arguments },
+      })),
+    };
+
+    // Execute tool calls and collect results
+    const toolResultMsgs: { role: 'tool'; content: string; tool_call_id: string }[] = [];
+
     for (const toolCall of toolCalls) {
       callbacks.onToolCallStart(toolCall);
 
@@ -221,7 +238,7 @@ export async function sendChatMessage(
 
       callbacks.onToolCallComplete(toolCall, result);
 
-      // Add tool result to history
+      // Add tool result to UI history
       const toolMsg: ChatMessage = {
         id: generateId(),
         role: 'tool',
@@ -231,25 +248,20 @@ export async function sendChatMessage(
       };
       updatedHistory.push(toolMsg);
 
-      // Add to LLM messages for next round
-      currentMessages = [
-        ...currentMessages,
-        {
-          role: 'assistant' as const,
-          content: assistantContent,
-          tool_calls: toolCalls.map((tc) => ({
-            id: tc.id,
-            type: 'function' as const,
-            function: { name: tc.name, arguments: tc.arguments },
-          })),
-        },
-        {
-          role: 'tool' as const,
-          content: JSON.stringify(result),
-          tool_call_id: toolCall.id,
-        },
-      ];
+      // Collect for LLM messages
+      toolResultMsgs.push({
+        role: 'tool' as const,
+        content: JSON.stringify(result),
+        tool_call_id: toolCall.id,
+      });
     }
+
+    // Build LLM messages for next round: assistant message once, then all tool results
+    currentMessages = [
+      ...currentMessages,
+      assistantLlmMsg,
+      ...toolResultMsgs,
+    ];
 
     // Reset for next round
     assistantContent = '';
