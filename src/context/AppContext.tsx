@@ -18,6 +18,7 @@ import {
   getTransformationHistory as getStoredHistory,
   saveTransformationHistory,
   clearTransformationHistory as clearStoredHistory,
+  removeTransformationHistoryEntry,
   getSettingFromStorage,
   saveSettingToStorage,
   removeSettingFromStorage,
@@ -71,6 +72,7 @@ interface AppContextValue {
   // History
   history: HistoryItem[];
   addToHistory: (item: HistoryItem) => void;
+  removeFromHistory: (id: string) => void;
   clearHistory: () => void;
 
   // Settings
@@ -365,6 +367,14 @@ export function AppProvider({ children }: AppProviderProps) {
       category: item.transformation.category,
     });
   }, [settings.defaultModel, settings.defaultWidth, settings.defaultHeight]);
+
+  /**
+   * Remove a single history item by id.
+   */
+  const removeFromHistory = useCallback((id: string) => {
+    setHistory((prev) => prev.filter((item) => item.id !== id));
+    removeTransformationHistoryEntry(id);
+  }, []);
 
   /**
    * Clear all history.
@@ -1078,6 +1088,7 @@ export function AppProvider({ children }: AppProviderProps) {
         editStack,
         history,
         addToHistory,
+        removeFromHistory,
         clearHistory,
         settings,
         updateSetting,

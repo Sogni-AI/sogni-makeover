@@ -41,7 +41,7 @@ function getCategoryLabel(item: HistoryItem): string {
 // ---------------------------------------------------------------------------
 
 function HistoryView() {
-  const { history, clearHistory, setCurrentView } = useApp();
+  const { history, clearHistory, removeFromHistory, setCurrentView } = useApp();
   const { showToast } = useToast();
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
@@ -58,6 +58,12 @@ function HistoryView() {
 
   const handleCardClick = () => {
     setCurrentView('studio');
+  };
+
+  const handleDeleteItem = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    removeFromHistory(id);
+    showToast('Entry deleted', 'success');
   };
 
   const handleImageError = (id: string) => {
@@ -147,7 +153,7 @@ function HistoryView() {
               className="group cursor-pointer overflow-hidden rounded-xl border border-primary-400/[0.06] bg-surface-900/40 text-left transition-all hover:border-primary-400/15 hover:bg-surface-900/60"
             >
               {/* Thumbnail */}
-              <div className="aspect-[2/3] bg-surface-800">
+              <div className="relative aspect-[2/3] bg-surface-800">
                 {failedImages.has(item.id) ? (
                   <div className="flex h-full w-full items-center justify-center bg-surface-800">
                     <svg className="h-8 w-8 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -162,6 +168,16 @@ function HistoryView() {
                     onError={() => handleImageError(item.id)}
                   />
                 )}
+                {/* Delete button */}
+                <button
+                  onClick={(e) => handleDeleteItem(e, item.id)}
+                  className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/60 opacity-0 backdrop-blur-sm transition-all hover:bg-red-500/80 hover:text-white group-hover:opacity-100"
+                  title="Delete"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
 
               {/* Info */}
