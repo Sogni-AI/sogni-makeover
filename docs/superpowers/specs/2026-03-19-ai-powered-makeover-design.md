@@ -259,12 +259,13 @@ class ChatService {
   ) {}
 
   // Returns the full updated conversation history (not a single message)
+  // Uses this.toolContext.getSogniClient() internally for LLM calls.
+  // Falls back to backend proxy if client is null (demo mode).
   async sendMessage(
     userMessage: string,
     conversationHistory: ChatMessage[],
     photoAnalysis: PhotoAnalysis,
-    callbacks: ChatStreamCallbacks,
-    sogniClient?: SogniClient | null
+    callbacks: ChatStreamCallbacks
   ): Promise<ChatMessage[]>;
 }
 ```
@@ -550,6 +551,8 @@ interface MakeoverToolContext {
 
 `generateFromPrompt` is a new wrapper added to AppContext that constructs a synthetic `Transformation` object internally (with `category: 'ai-generated'` and `subcategory: 'chat'`) and calls the existing `generateMakeover` pipeline. This avoids refactoring `generateMakeover` while giving tools a clean interface.
 
+**Note**: `'ai-generated'` must be added to the `TransformationCategory` union in `src/types/index.ts`.
+
 The `useChat` hook creates a `MakeoverToolContext` from AppContext values and passes it to the `ChatService` constructor, which passes it through to the registry on each `execute()` call.
 
 ### Registry
@@ -679,7 +682,7 @@ event: error
 data: {"message": "Model timeout", "code": "timeout"}
 ```
 
-The frontend `chatService` consumes this stream via `EventSource` or `fetch` with `ReadableStream` (matching the pattern already used for generation progress). Tool calls received via SSE are executed client-side by the `useChat` hook, and results are sent back as a new `/api/chat/completions` request with the tool result appended to the messages array.
+The frontend `chatService` consumes this stream via `fetch` with `ReadableStream` (not `EventSource`, which only supports GET — the chat endpoint is POST). Tool calls received via the stream are executed client-side by the `useChat` hook, and results are sent back as a new `POST /api/chat/completions` request with the tool result appended to the messages array.
 
 **Note**: For demo users, the tool calling loop happens client-side across multiple SSE requests (LLM call → tool_call event → client executes tool → new request with tool result). This is less efficient than the authenticated path where the chat service can run the full loop in one call, but keeps the backend stateless.
 
@@ -730,6 +733,7 @@ app.use('/api/chat', chatRoutes);
 | `CategoryNav.tsx` | Dynamic categories instead of static |
 | `MakeoverStudio.tsx` | Adds ChatPanel alongside existing layout |
 | `src/services/api.ts` | Adds `analyzePhoto()` and `chatCompletion()` |
+| `src/types/index.ts` | Add `'ai-generated'` to `TransformationCategory` union |
 | `src/services/frontendSogniAdapter.ts` | Adds `getChatClient(): SogniClient` method that exposes the underlying raw SDK client for direct `chat.completions.create()` calls. The adapter's project-event normalization is not needed for chat — we pass through the raw client. This matches how sogni-photobooth accesses the chat API. |
 
 ### Kept As-Is
