@@ -12,6 +12,8 @@ interface ChatPanelProps {
   currentToolProgress: ToolProgress | null;
   onSendMessage: (text: string) => void;
   onClose: () => void;
+  onSelectCategory?: (categoryName: string) => void;
+  onHighlightTransformation?: (transformationName: string) => void;
 }
 
 const defaultSuggestions = [
@@ -28,6 +30,8 @@ function ChatPanel({
   currentToolProgress,
   onSendMessage,
   onClose,
+  onSelectCategory,
+  onHighlightTransformation,
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -78,6 +82,8 @@ function ChatPanel({
                     toolProgress={
                       message.isStreaming ? currentToolProgress : null
                     }
+                    onSelectCategory={onSelectCategory}
+                    onSelectTransformation={onHighlightTransformation}
                   />
                 ))}
               <div ref={messagesEndRef} />

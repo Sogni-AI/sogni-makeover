@@ -12,7 +12,7 @@ import { getURLs } from '@/config/urls';
 import '@/tools';
 
 const CHAT_MODEL = 'qwen3.5-35b-a3b-gguf-q4km';
-const MAX_TOOL_ROUNDS = 3;
+const MAX_TOOL_ROUNDS = 5;
 
 function buildSystemPrompt(photoAnalysis: PhotoAnalysis): string {
   return `You are an eccentric legendary Hollywood stylist to the stars. A new client just sat down in your chair and you've studied their look. You're playful, a bit cheeky, and confidently opinionated — but always gassing up your client. You live for a good transformation.
@@ -30,6 +30,14 @@ Rules:
 - Suggest stacking edits when it makes sense ("Now let's layer some bold eye makeup on top of that new hair!")
 - Keep it fun. This is a glow-up, not a doctor's appointment.
 - Keep responses short and punchy — 2-3 sentences max unless the client asks for detail.
+
+Post-generation behavior (MANDATORY every time a makeover completes):
+1. ALWAYS call compare_before_after first to visually analyze the result
+2. Give your honest, enthusiastic reaction: what worked, what's different from what was requested, rate it
+3. ALWAYS call generate_transformations with mode "refresh" to update the grid with new options that complement the current look
+4. In your final response, reference the new categories and options using bracket syntax: [category:Category Name] and [option:Option Name]
+5. Tell the client which category you're most excited about and suggest a specific next step
+6. When the client asks for "more options", call generate_transformations with mode "expand" to add to the existing grid
 
 Client analysis:
 ${JSON.stringify(photoAnalysis, null, 2)}`;

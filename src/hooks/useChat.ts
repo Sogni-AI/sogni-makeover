@@ -28,6 +28,7 @@ interface UseChatOptions {
     negativePrompt?: string;
     useStackedInput?: boolean;
   }) => Promise<{ resultUrl: string; projectId: string }>;
+  onCategoryRecommended?: (categoryName: string) => void;
 }
 
 export interface UseChatReturn {
@@ -43,7 +44,7 @@ export interface UseChatReturn {
   closeChat: () => void;
   toggleChat: () => void;
   notifyTransformationSelected: (transformation: GeneratedTransformation) => void;
-  notifyGenerationComplete: (resultUrl: string) => void;
+  notifyGenerationComplete: (transformation: { name: string; prompt: string }, resultUrl: string) => Promise<void>;
   initWithPhoto: (imageUrl: string) => Promise<void>;
 }
 
@@ -57,6 +58,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     getEditStackDepth,
     isGenerating,
     generateFromPrompt,
+    onCategoryRecommended,
   } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -69,6 +71,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const photoAnalysisRef = useRef<PhotoAnalysis>(FALLBACK_ANALYSIS);
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
+  const generatedCategoriesRef = useRef<GeneratedCategory[]>([]);
+  generatedCategoriesRef.current = generatedCategories;
   const tokenQueueRef = useRef<string[]>([]);
   const drainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -157,6 +161,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     },
     getSogniClient: () => sogniClient,
     getPhotoAnalysis: () => photoAnalysisRef.current,
+    getCurrentCategories: () => generatedCategoriesRef.current,
   }), [sogniClient, originalImageBase64, originalImageUrl, getCurrentResultUrl, getEditStack, getEditStackDepth, isGenerating, generateFromPrompt]);
 
   const sendMessage = useCallback(async (text: string) => {
@@ -214,6 +219,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               const categories = result.data.categories as GeneratedCategory[];
               if (categories) {
                 setGeneratedCategories(categories);
+              }
+              // Preselect recommended category
+              const recommended = result.data.recommendedCategory as string;
+              if (recommended) {
+                onCategoryRecommended?.(recommended);
               }
             }
 
@@ -347,9 +357,101 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const notifyGenerationComplete = useCallback((_resultUrl: string) => {
-    // The chat service handles this via tool result callbacks
-  }, []);
+  const notifyGenerationComplete = useCallback(async (transformation: { name: string; prompt: string }, _resultUrl: string) => {
+    if (isStreaming) return;
+    setIsStreaming(true);
+
+    const syntheticMessage = `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze. Give me your take on how it turned out and refresh my options.]`;
+
+    // Create streaming assistant placeholder (no user message shown)
+    const assistantPlaceholderId = `msg-${Date.now()}-analysis`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantPlaceholderId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    try {
+      const toolContext = buildToolContext();
+      const updatedHistory = await sendChatMessage(
+        syntheticMessage,
+        messagesRef.current,
+        photoAnalysisRef.current,
+        toolContext,
+        {
+          onToken: (token) => {
+            enqueueToken(token);
+          },
+          onToolCallStart: (toolCall) => {
+            setCurrentToolProgress({
+              toolName: toolCall.name,
+              status: 'running',
+              message: getToolMessage(toolCall.name),
+            });
+          },
+          onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
+            setCurrentToolProgress({
+              toolName: toolCall.name,
+              status: result.success ? 'completed' : 'failed',
+              message: result.success ? 'Done!' : (result.error || 'Failed'),
+            });
+
+            // If generate_transformations succeeded, update the grid
+            if (toolCall.name === 'generate_transformations' && result.success && result.data) {
+              const categories = result.data.categories as GeneratedCategory[];
+              if (categories) {
+                setGeneratedCategories(categories);
+              }
+              // Preselect recommended category
+              const recommended = result.data.recommendedCategory as string;
+              if (recommended) {
+                onCategoryRecommended?.(recommended);
+              }
+            }
+
+            // Clear progress after a delay
+            setTimeout(() => setCurrentToolProgress(null), 2000);
+          },
+          onComplete: (finalHistory) => {
+            flushTokenQueue();
+            // Filter out the synthetic trigger message from displayed history
+            const filtered = finalHistory
+              .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
+              .map((m) => ({ ...m, isStreaming: false }));
+            setMessages(filtered);
+          },
+          onError: (error) => {
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.isStreaming) {
+                return [
+                  ...prev.slice(0, -1),
+                  { ...last, content: `Hmm, had trouble analyzing that one. ${error.message}`, isStreaming: false },
+                ];
+              }
+              return prev;
+            });
+          },
+        },
+        sogniClient
+      );
+
+      // Final update — filter synthetic message
+      const filtered = updatedHistory
+        .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
+        .map((m) => ({ ...m, isStreaming: false }));
+      setMessages(filtered);
+    } catch (error) {
+      console.error('[useChat] Auto-analysis error:', error);
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, onCategoryRecommended]);
 
   const openChat = useCallback(() => setIsChatOpen(true), []);
   const closeChat = useCallback(() => setIsChatOpen(false), []);

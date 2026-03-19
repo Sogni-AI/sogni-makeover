@@ -1,10 +1,45 @@
 import type { GeneratedCategory, PhotoAnalysis } from '@/types/chat';
 import { getURLs } from '@/config/urls';
 
-const TRANSFORMATION_GENERATION_PROMPT = `Based on this client's features and what they're looking for, generate 8-12 transformation options organized into 2-4 categories.
+function buildGenerationPrompt(
+  photoAnalysis: PhotoAnalysis,
+  intent: string,
+  options?: {
+    mode?: 'refresh' | 'expand';
+    currentLook?: string;
+    currentCategories?: GeneratedCategory[];
+  }
+): string {
+  const mode = options?.mode || 'refresh';
+  const currentLook = options?.currentLook;
+  const currentCategories = options?.currentCategories;
 
-Client: {photoAnalysis}
-They want: {intent}
+  const baseRules = `Rules:
+- You MUST generate at least 4 categories with at least 5 transformation options each.
+- Write prompts with the actual subject description baked in (not generic "the person")
+- Set intensity (denoising strength) appropriate to how dramatic the change is: subtle 0.5-0.6, moderate 0.6-0.75, dramatic 0.75-0.95
+- Each pitch is a one-liner the stylist would say to sell the look — cheeky, confident, fun
+- Categories should be relevant to what the client asked for
+- Keep negative prompts consistent: "deformed, distorted, bad quality, blurry"
+- Generate unique IDs for each transformation (use descriptive slugs like "copper-auburn-hair")
+- Include emoji icons that match each transformation
+- Return a \`recommendedCategory\` field with the name of the category you're most excited about for this client right now.`;
+
+  let modeInstructions = '';
+
+  if (mode === 'refresh' && currentCategories?.length) {
+    modeInstructions = `\n\nHere are the current options in the grid: ${JSON.stringify(currentCategories, null, 2)}. Reorganize completely based on the client's current look. Remove options that no longer make sense (e.g., if they just got platinum hair, don't offer the same hair colors). Add new complementary options.`;
+    if (currentLook) {
+      modeInstructions += `\n\nThe client currently looks like: ${currentLook}`;
+    }
+  } else if (mode === 'expand' && currentCategories?.length) {
+    modeInstructions = `\n\nHere are the existing options. Keep ALL existing categories and options. Add new categories or more options within existing categories. Do not remove or replace anything.\n${JSON.stringify(currentCategories, null, 2)}`;
+  }
+
+  return `Based on this client's features and what they're looking for, generate transformation options organized into categories.
+
+Client: ${JSON.stringify(photoAnalysis, null, 2)}
+They want: ${intent}${modeInstructions}
 
 Return JSON:
 {
@@ -24,25 +59,14 @@ Return JSON:
         }
       ]
     }
-  ]
+  ],
+  "recommendedCategory": "Hair Color"
 }
 
-Rules:
-- Write prompts with the actual subject description baked in (not generic "the person")
-- Set intensity (denoising strength) appropriate to how dramatic the change is: subtle 0.5-0.6, moderate 0.6-0.75, dramatic 0.75-0.95
-- Each pitch is a one-liner the stylist would say to sell the look — cheeky, confident, fun
-- Categories should be relevant to what the client asked for
-- Keep negative prompts consistent: "deformed, distorted, bad quality, blurry"
-- Generate unique IDs for each transformation (use descriptive slugs like "copper-auburn-hair")
-- Include emoji icons that match each transformation`;
-
-function buildGenerationPrompt(photoAnalysis: PhotoAnalysis, intent: string): string {
-  return TRANSFORMATION_GENERATION_PROMPT
-    .replace('{photoAnalysis}', JSON.stringify(photoAnalysis, null, 2))
-    .replace('{intent}', intent);
+${baseRules}`;
 }
 
-function parseCategories(content: string): GeneratedCategory[] {
+function parseGenerationResult(content: string): { categories: GeneratedCategory[]; recommendedCategory: string } {
   let cleaned = content.trim();
   const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) cleaned = fenceMatch[1].trim();
@@ -54,7 +78,7 @@ function parseCategories(content: string): GeneratedCategory[] {
     throw new Error('Expected categories array');
   }
 
-  return categories.map((cat: Record<string, unknown>) => ({
+  const mappedCategories = categories.map((cat: Record<string, unknown>) => ({
     name: String(cat.name || 'Looks'),
     icon: String(cat.icon || '✨'),
     transformations: (Array.isArray(cat.transformations) ? cat.transformations : []).map(
@@ -69,6 +93,10 @@ function parseCategories(content: string): GeneratedCategory[] {
       })
     ),
   }));
+
+  const recommendedCategory = parsed.recommendedCategory || mappedCategories[0]?.name || '';
+
+  return { categories: mappedCategories, recommendedCategory };
 }
 
 /**
@@ -78,9 +106,14 @@ export async function generateTransformations(
   photoAnalysis: PhotoAnalysis,
   intent: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sogniClient?: any
-): Promise<GeneratedCategory[]> {
-  const prompt = buildGenerationPrompt(photoAnalysis, intent);
+  sogniClient?: any,
+  options?: {
+    mode?: 'refresh' | 'expand';
+    currentLook?: string;
+    currentCategories?: GeneratedCategory[];
+  }
+): Promise<{ categories: GeneratedCategory[]; recommendedCategory: string }> {
+  const prompt = buildGenerationPrompt(photoAnalysis, intent, options);
 
   try {
     if (sogniClient?.getChatClient) {
@@ -103,12 +136,11 @@ export async function generateTransformations(
       });
 
       // SDK ChatStream yields { content, ... } directly (not OpenAI choices format)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const chunk of stream as AsyncIterable<{ content?: string }>) {
         if (chunk.content) fullContent += chunk.content;
       }
 
-      return parseCategories(fullContent);
+      return parseGenerationResult(fullContent);
     } else {
       // Demo: backend proxy
       const urls = getURLs();
@@ -152,34 +184,37 @@ export async function generateTransformations(
         }
       }
 
-      return parseCategories(fullContent);
+      return parseGenerationResult(fullContent);
     }
   } catch (error) {
     console.error('[TransformationService] Error generating transformations:', error);
     // Return a fallback set
-    return [{
-      name: 'Quick Looks',
-      icon: '✨',
-      transformations: [
-        {
-          id: 'fallback-glam',
-          name: 'Glamorous Makeover',
-          prompt: `Give ${photoAnalysis.subjectDescription} a glamorous red carpet makeover while preserving facial features and identity`,
-          pitch: 'Let\'s start with a classic glow-up',
-          intensity: 0.7,
-          negativePrompt: 'deformed, distorted, bad quality, blurry',
-          icon: '💫',
-        },
-        {
-          id: 'fallback-hair',
-          name: 'Bold Hair Change',
-          prompt: `Change ${photoAnalysis.subjectDescription}'s hair to a completely new dramatic style while preserving facial features and identity`,
-          pitch: 'Nothing says transformation like a new do',
-          intensity: 0.75,
-          negativePrompt: 'deformed, distorted, bad quality, blurry',
-          icon: '💇',
-        },
-      ],
-    }];
+    return {
+      categories: [{
+        name: 'Quick Looks',
+        icon: '✨',
+        transformations: [
+          {
+            id: 'fallback-glam',
+            name: 'Glamorous Makeover',
+            prompt: `Give ${photoAnalysis.subjectDescription} a glamorous red carpet makeover while preserving facial features and identity`,
+            pitch: 'Let\'s start with a classic glow-up',
+            intensity: 0.7,
+            negativePrompt: 'deformed, distorted, bad quality, blurry',
+            icon: '💫',
+          },
+          {
+            id: 'fallback-hair',
+            name: 'Bold Hair Change',
+            prompt: `Change ${photoAnalysis.subjectDescription}'s hair to a completely new dramatic style while preserving facial features and identity`,
+            pitch: 'Nothing says transformation like a new do',
+            intensity: 0.75,
+            negativePrompt: 'deformed, distorted, bad quality, blurry',
+            icon: '💇',
+          },
+        ],
+      }],
+      recommendedCategory: 'Quick Looks',
+    };
   }
 }

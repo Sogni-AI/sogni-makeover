@@ -61,6 +61,9 @@ function MakeoverStudio() {
     getEditStackDepth: () => editStackRef.current.stepCount,
     isGenerating: () => isGeneratingRef.current,
     generateFromPrompt,
+    onCategoryRecommended: (categoryName: string) => {
+      setSelectedCategory(categoryName);
+    },
   });
 
   // Use generated categories from chat
@@ -85,6 +88,21 @@ function MakeoverStudio() {
       setSelectedCategory(generatedCategories[0].name);
     }
   }, [generatedCategories.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger auto-analysis when generation completes
+  const prevGeneratingRef = useRef(false);
+  useEffect(() => {
+    const wasGenerating = prevGeneratingRef.current;
+    prevGeneratingRef.current = isGenerating;
+
+    if (wasGenerating && !isGenerating && editStack.currentStep) {
+      const step = editStack.currentStep;
+      chat.notifyGenerationComplete(
+        { name: step.transformation.name, prompt: step.transformation.prompt },
+        step.resultImageUrl
+      );
+    }
+  }, [isGenerating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCategoryChange = useCallback((categoryName: string) => {
     setSelectedCategory(categoryName);
@@ -316,6 +334,17 @@ function MakeoverStudio() {
           currentToolProgress={chat.currentToolProgress}
           onSendMessage={chat.sendMessage}
           onClose={chat.closeChat}
+          onSelectCategory={(categoryName: string) => setSelectedCategory(categoryName)}
+          onHighlightTransformation={(transformationId: string) => {
+            // Find which category contains this transformation and select it
+            const category = generatedCategories.find(c =>
+              c.transformations.some(t => t.id === transformationId || t.name === transformationId)
+            );
+            if (category) {
+              setSelectedCategory(category.name);
+              setActiveTransformationId(transformationId);
+            }
+          }}
         />
       </div>
     </motion.div>
