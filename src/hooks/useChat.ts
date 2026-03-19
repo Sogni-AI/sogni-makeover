@@ -48,6 +48,11 @@ export interface UseChatReturn {
   notifyTransformationSelected: (transformation: GeneratedTransformation) => void;
   notifyGenerationComplete: (transformation: { name: string; prompt: string }, resultUrl: string) => Promise<void>;
   initWithPhoto: (imageUrl: string) => Promise<void>;
+  restoreSession: (data: {
+    messages: ChatMessage[];
+    photoAnalysis: PhotoAnalysis | null;
+    generatedCategories: GeneratedCategory[];
+  }) => void;
 }
 
 export function useChat(options: UseChatOptions): UseChatReturn {
@@ -415,6 +420,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }
   }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, handleTransformationResult]);
 
+  const restoreSession = useCallback((data: {
+    messages: ChatMessage[];
+    photoAnalysis: PhotoAnalysis | null;
+    generatedCategories: GeneratedCategory[];
+  }) => {
+    setMessages(data.messages);
+    if (data.photoAnalysis) {
+      photoAnalysisRef.current = data.photoAnalysis;
+      setPhotoAnalysis(data.photoAnalysis);
+    }
+    setGeneratedCategories(data.generatedCategories);
+    setIsChatOpen(true);
+  }, []);
+
   const notifyTransformationSelected = useCallback((transformation: GeneratedTransformation) => {
     // Add an informational message to chat history (no LLM invocation).
     // The grid click triggers generateMakeover directly — this just keeps the chat in context.
@@ -692,6 +711,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     notifyTransformationSelected,
     notifyGenerationComplete,
     initWithPhoto,
+    restoreSession,
   };
 }
 
