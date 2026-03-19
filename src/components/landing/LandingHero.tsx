@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-import type { Gender } from '@/types';
 import Button from '@/components/common/Button';
-import { VenusIcon, MarsIcon } from './GenderIcons';
 import {
   QWEN_LIGHTNING_MODEL_ID,
   QWEN_STANDARD_MODEL_ID,
@@ -63,15 +61,13 @@ const QUALITY_TIERS = [
 ] as const;
 
 function LandingHero() {
-  const { setCurrentView, setSelectedGender, settings, updateSetting } = useApp();
+  const { setCurrentView, settings, updateSetting } = useApp();
   const { isAuthenticated, authMode } = useSogniAuth();
   const { tokenType } = useWallet();
   const tierCosts = useQualityTierCosts();
   const isLoggedIn = isAuthenticated && authMode !== 'demo';
   const costLabel = tokenType === 'sogni' ? 'Sogni' : 'Spark';
-  const [step, setStep] = useState<'idle' | 'gender' | 'quality'>('idle');
-  const [pendingGender, setPendingGender] = useState<Gender | null>(null);
-  const [hoveredGender, setHoveredGender] = useState<Gender | null>(null);
+  const [step, setStep] = useState<'idle' | 'quality'>('idle');
 
   // Portrait slideshow state
   const [portraitDisplay, setPortraitDisplay] = useState({
@@ -83,12 +79,7 @@ function LandingHero() {
   });
   const lastGenderRef = useRef<'female' | 'male'>('female');
   const shuffleBagRef = useRef<Record<string, number[]>>({ female: [], male: [] });
-  const hoverIndexRef = useRef<Record<string, number>>({ female: 0, male: 0 });
   const keyboardIndexRef = useRef(0);
-  const keyboardGenderIndexRef = useRef(0);
-  const hoveredGenderRef = useRef<Gender | null>(null);
-  const prevHoveredGenderRef = useRef<Gender | null>(null);
-  const [idleResetKey, setIdleResetKey] = useState(0);
 
   const transitionTo = useCallback((pair: ImagePair) => {
     setPortraitDisplay(prev => {
@@ -120,70 +111,26 @@ function LandingHero() {
     return pairs[nextIdx];
   }, []);
 
-  // Keep hoveredGenderRef in sync so keyboard handler can read it
-  useEffect(() => {
-    hoveredGenderRef.current = hoveredGender;
-    keyboardGenderIndexRef.current = 0;
-  }, [hoveredGender]);
-
   // Keyboard arrow navigation for portrait slideshow
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
       const delta = e.key === 'ArrowRight' ? 1 : -1;
-      const hGender = hoveredGenderRef.current;
 
-      if (hGender) {
-        // Gender-specific: only cycle through hovered gender's pairs
-        const pairs = hGender === 'female' ? femalePairs : malePairs;
-        const len = pairs.length;
-        keyboardGenderIndexRef.current = (keyboardGenderIndexRef.current + delta + len) % len;
-        transitionTo(pairs[keyboardGenderIndexRef.current]);
-        lastGenderRef.current = hGender;
-      } else {
-        // Idle: cycle through interleaved pairs (alternating genders)
-        const len = allPairs.length;
-        keyboardIndexRef.current = (keyboardIndexRef.current + delta + len) % len;
-        const pair = allPairs[keyboardIndexRef.current];
-        transitionTo(pair);
-        // Determine gender of current pair for idle rotation continuity
-        lastGenderRef.current = femalePairs.includes(pair) ? 'female' : 'male';
-      }
-      // Reset idle timer
-      setIdleResetKey(k => k + 1);
+      // Cycle through interleaved pairs (alternating genders)
+      const len = allPairs.length;
+      keyboardIndexRef.current = (keyboardIndexRef.current + delta + len) % len;
+      const pair = allPairs[keyboardIndexRef.current];
+      transitionTo(pair);
+      lastGenderRef.current = femalePairs.includes(pair) ? 'female' : 'male';
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Portrait rotation effect
+  // Portrait rotation effect — idle mode: alternate genders
   useEffect(() => {
-    if (hoveredGender) {
-      const pairs = hoveredGender === 'female' ? femalePairs : malePairs;
-
-      // Only show immediate transition when hoveredGender actually changed,
-      // not when re-triggered by keyboard reset (idleResetKey)
-      if (prevHoveredGenderRef.current !== hoveredGender) {
-        const idx = hoverIndexRef.current[hoveredGender] % pairs.length;
-        transitionTo(pairs[idx]);
-        hoverIndexRef.current[hoveredGender] = idx + 1;
-      }
-      prevHoveredGenderRef.current = hoveredGender;
-      lastGenderRef.current = hoveredGender;
-
-      // Rotate through same-gender pairs sequentially
-      const interval = setInterval(() => {
-        const nextIdx = hoverIndexRef.current[hoveredGender] % pairs.length;
-        transitionTo(pairs[nextIdx]);
-        hoverIndexRef.current[hoveredGender] = nextIdx + 1;
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-
-    prevHoveredGenderRef.current = null;
-
-    // Idle mode: alternate genders
     const lastShown: Record<string, number> = { female: 0, male: -1 };
     const interval = setInterval(() => {
       const nextGender = lastGenderRef.current === 'female' ? 'male' : 'female';
@@ -194,16 +141,9 @@ function LandingHero() {
       lastGenderRef.current = nextGender;
     }, 5000);
     return () => clearInterval(interval);
-  }, [hoveredGender, idleResetKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-
-  const handleSelectGender = (gender: Gender) => {
-    setPendingGender(gender);
-    setStep('quality');
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectQuality = (modelId: string) => {
-    if (pendingGender) setSelectedGender(pendingGender);
     updateSetting('defaultModel', modelId);
     setCurrentView('capture');
   };
@@ -346,7 +286,7 @@ function LandingHero() {
                   <Button
                     variant="primary"
                     size="lg"
-                    onClick={() => setStep('gender')}
+                    onClick={() => setStep('quality')}
                     className="text-lg shadow-xl shadow-primary-400/10"
                   >
                     Start Your Makeover
@@ -354,49 +294,6 @@ function LandingHero() {
                   <p className="text-sm font-light tracking-wide text-white/20">
                     No sign-up required &bull; Free to try
                   </p>
-                </motion.div>
-              ) : step === 'gender' ? (
-                <motion.div
-                  key="gender-select"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } }}
-                  exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.3 } }}
-                  className="flex items-center gap-8 sm:gap-12"
-                >
-                  {/* Female icon */}
-                  <motion.button
-                    aria-label="Female"
-                    initial={{ x: 30, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1, transition: { delay: 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] } }}
-                    whileHover={{ scale: 1.08 }}
-                    whileTap={{ scale: 0.95 }}
-                    onHoverStart={() => setHoveredGender('female')}
-                    onHoverEnd={() => setHoveredGender(null)}
-                    onClick={() => handleSelectGender('female')}
-                    className="group relative flex h-20 w-20 items-center justify-center rounded-full border border-primary-400/20 bg-surface-900/60 backdrop-blur-sm transition-all duration-300 hover:border-primary-400/40 hover:bg-primary-400/[0.08] hover:shadow-lg hover:shadow-primary-400/10 sm:h-24 sm:w-24 cursor-pointer"
-                  >
-                    <VenusIcon className="h-10 w-10 text-white/50 transition-colors duration-300 group-hover:text-primary-300 sm:h-12 sm:w-12" />
-                    <span className="absolute -bottom-6 text-[10px] font-light uppercase tracking-[0.15em] text-white/0 transition-all duration-300 group-hover:text-white/40">femme</span>
-                  </motion.button>
-
-                  {/* Divider */}
-                  <div className="h-12 w-px bg-gradient-to-b from-transparent via-white/10 to-transparent" />
-
-                  {/* Male icon */}
-                  <motion.button
-                    aria-label="Male"
-                    initial={{ x: -30, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1, transition: { delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] } }}
-                    whileHover={{ scale: 1.08 }}
-                    whileTap={{ scale: 0.95 }}
-                    onHoverStart={() => setHoveredGender('male')}
-                    onHoverEnd={() => setHoveredGender(null)}
-                    onClick={() => handleSelectGender('male')}
-                    className="group relative flex h-20 w-20 items-center justify-center rounded-full border border-primary-400/20 bg-surface-900/60 backdrop-blur-sm transition-all duration-300 hover:border-primary-400/40 hover:bg-primary-400/[0.08] hover:shadow-lg hover:shadow-primary-400/10 sm:h-24 sm:w-24 cursor-pointer"
-                  >
-                    <MarsIcon className="h-10 w-10 text-white/50 transition-colors duration-300 group-hover:text-primary-300 sm:h-12 sm:w-12" />
-                    <span className="absolute -bottom-6 text-[10px] font-light uppercase tracking-[0.15em] text-white/0 transition-all duration-300 group-hover:text-white/40">homme</span>
-                  </motion.button>
                 </motion.div>
               ) : (
                 <motion.div
