@@ -70,6 +70,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const streamingLockRef = useRef(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   // Tool progress is now stored as permanent messages — no ephemeral state needed
   const [generatedCategories, setGeneratedCategories] = useState<GeneratedCategory[]>([]);
@@ -244,7 +245,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const notifyGenerationCompleteRef = useRef<any>(null);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (isStreaming) return;
+    if (streamingLockRef.current) return;
+    streamingLockRef.current = true;
     setIsStreaming(true);
 
     // Create a streaming assistant message placeholder
@@ -394,11 +396,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         return prev;
       });
     } finally {
+      streamingLockRef.current = false;
       setIsStreaming(false);
       // Process any queued auto-analysis that arrived while streaming
       setTimeout(() => drainPendingAnalysis(), 0);
     }
-  }, [isStreaming, isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, drainPendingAnalysis, handleTransformationResult]);
+  }, [isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, drainPendingAnalysis, handleTransformationResult]);
 
   const initWithPhoto = useCallback(async (imageUrl: string) => {
     // Run photo analysis
@@ -670,6 +673,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     try {
       const toolContext = buildToolContext();
+
+      // The edit stack ref may not yet reflect the just-completed step due to
+      // React batching — override getEditStack with a fallback so that
+      // compare_before_after / analyze_result can still access the result.
+      const originalGetEditStack = toolContext.getEditStack;
+      toolContext.getEditStack = () => {
+        const stack = originalGetEditStack();
+        if (stack.length > 0) return stack;
+        // Fallback: synthesize a minimal step from the data we already have
+        return [{
+          transformation: { id: 'pending', name: transformation.name, category: 'ai-generated' as const, subcategory: 'chat', prompt: transformation.prompt, icon: '' },
+          resultImageUrl: resultUrl,
+          resultImageBase64: '',
+          timestamp: Date.now(),
+        }];
+      };
+
       await sendChatMessage(
         syntheticMessage,
         messagesRef.current,
@@ -791,7 +811,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const autoPilotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const kickOffAutoPilot = useCallback(async () => {
-    if (isStreamingRef.current || isAutoAnalyzingRef.current || !generatedCategoriesRef.current.length) return;
+    if (streamingLockRef.current || isAutoAnalyzingRef.current || !generatedCategoriesRef.current.length) return;
+    streamingLockRef.current = true;
     setIsStreaming(true);
 
     autoPilotIterationsRef.current = 1;
@@ -905,7 +926,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       );
     } catch (error) {
       console.error('[useChat] Auto-pilot kickoff error:', error);
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.isStreaming) {
+          return [...prev.slice(0, -1), { ...last, content: 'Auto-pilot hit a snag. Try again?', isStreaming: false }];
+        }
+        return prev;
+      });
     } finally {
+      streamingLockRef.current = false;
       isAutoAnalyzingRef.current = false;
       setIsStreaming(false);
       // Drain any pending analysis queued during this run (continues auto-pilot loop)

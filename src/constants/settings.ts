@@ -39,7 +39,7 @@ export const MODEL_OPTIONS: ModelOption[] = [
   {
     label: 'Flux.2 [dev]',
     value: FLUX2_DEV_MODEL_ID,
-    defaults: { steps: 30, guidance: 4, sampler: 'euler', scheduler: 'simple' },
+    defaults: { steps: 36, guidance: 4, sampler: 'euler', scheduler: 'simple' },
   },
 ];
 
@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultWidth: 1024,
   defaultHeight: 1536,
   defaultGuidance: 4,
-  defaultSteps: 30,
+  defaultSteps: 36,
   defaultSampler: 'euler',
   defaultScheduler: 'simple',
   outputFormat: 'jpg',

@@ -17,6 +17,8 @@ router.use(validateOrigin);
 // SSE streaming chat completion for demo users
 router.post('/completions', async (req, res) => {
   const { messages, tools } = req.body;
+  const max_tokens = typeof req.body.max_tokens === 'number' ? Math.max(1, Math.min(16000, req.body.max_tokens)) : undefined;
+  const temperature = typeof req.body.temperature === 'number' ? Math.max(0, Math.min(2, req.body.temperature)) : undefined;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array is required' });
@@ -38,15 +40,20 @@ router.post('/completions', async (req, res) => {
     if (!responseClosed) res.write(data);
   };
 
+  // Heartbeat to prevent proxy/Nginx idle-connection timeouts
+  const heartbeat = setInterval(() => {
+    safeWrite(':\n\n');
+  }, 15000);
+
   // Safety timeout (2 minutes)
   const timeout = setTimeout(() => {
     responseClosed = true;
-    res.write(`event: error\ndata: ${JSON.stringify({ message: 'Request timeout', code: 'timeout' })}\n\n`);
+    safeWrite(`event: error\ndata: ${JSON.stringify({ message: 'Request timeout', code: 'timeout' })}\n\n`);
     res.end();
   }, 120000);
 
   try {
-    const stream = await chatCompletion(messages, tools || []);
+    const stream = await chatCompletion(messages, tools || [], { max_tokens, temperature });
 
     let toolCalls = [];
     let completeSent = false;
@@ -113,6 +120,7 @@ router.post('/completions', async (req, res) => {
       code: 'chat_error',
     })}\n\n`);
   } finally {
+    clearInterval(heartbeat);
     clearTimeout(timeout);
     if (!responseClosed) res.end();
     responseClosed = true;

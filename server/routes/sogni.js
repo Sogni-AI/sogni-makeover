@@ -526,7 +526,7 @@ router.post('/generate', ensureSessionId, async (req, res) => {
     const scheduler = req.body.scheduler || 'simple';
     const outputFormat = req.body.outputFormat || 'jpg';
     const numberOfMedia = requestedImages;
-    const denoisingStrength = req.body.denoisingStrength !== undefined ? parseFloat(req.body.denoisingStrength) : undefined;
+    const denoisingStrength = req.body.denoisingStrength !== undefined ? Math.max(0.1, Math.min(0.99, parseFloat(req.body.denoisingStrength) || 0.65)) : undefined;
     const tokenType = req.body.tokenType || 'spark';
 
     // Process context images from base64

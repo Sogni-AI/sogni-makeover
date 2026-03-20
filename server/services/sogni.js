@@ -989,16 +989,16 @@ export async function analyzeImageVision(imageUrl, systemPrompt) {
 
 const CHAT_MODEL = 'qwen3.5-35b-a3b-gguf-q4km';
 
-export async function chatCompletion(messages, tools = []) {
+export async function chatCompletion(messages, tools = [], options = {}) {
   return withSogniClient(async (client) => {
     const params = {
       model: CHAT_MODEL,
       messages,
       stream: true,
       tokenType: 'spark',
-      temperature: 0.7,
+      temperature: options.temperature ?? 0.7,
       top_p: 0.9,
-      max_tokens: 500,
+      max_tokens: Math.min(options.max_tokens ?? 500, 16000),
       think: false,
     };
 

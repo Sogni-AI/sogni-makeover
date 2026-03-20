@@ -161,6 +161,8 @@ export async function generateTransformations(
             { role: 'system', content: 'You are an eccentric legendary Hollywood stylist. Generate transformation options in JSON format exactly as requested.' },
             { role: 'user', content: prompt },
           ],
+          max_tokens: 15000,
+          temperature: 0.8,
         }),
         credentials: 'include',
       });
