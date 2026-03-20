@@ -91,10 +91,17 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   generatedCategoriesRef.current = generatedCategories;
   const tokenQueueRef = useRef<string[]>([]);
   const drainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCompletionRef = useRef<(() => void) | null>(null);
 
   const drainTokenQueue = useCallback(() => {
     if (tokenQueueRef.current.length === 0) {
       drainTimerRef.current = null;
+      // Execute pending completion when queue is fully drained
+      if (pendingCompletionRef.current) {
+        const fn = pendingCompletionRef.current;
+        pendingCompletionRef.current = null;
+        fn();
+      }
       return;
     }
     const token = tokenQueueRef.current.shift()!;
@@ -132,6 +139,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       });
     }
   }, []);
+
+  // Schedule work to run after the token queue has fully drained (typing animation completes).
+  // If the queue is already empty, runs immediately.
+  const deferUntilDrained = useCallback((fn: () => void) => {
+    if (tokenQueueRef.current.length === 0 && !drainTimerRef.current) {
+      fn();
+    } else {
+      pendingCompletionRef.current = fn;
+      // Ensure drain timer is running
+      if (!drainTimerRef.current) {
+        drainTimerRef.current = setTimeout(drainTokenQueue, 30);
+      }
+    }
+  }, [drainTokenQueue]);
 
   // Handle generate_transformations tool results — merge for expand, replace for refresh
   const handleTransformationResult = useCallback((result: ToolResult) => {
@@ -353,16 +374,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           },
           onComplete: (finalHistory) => {
-            flushTokenQueue();
-            // Collect tool progress messages from current state
-            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
-            const cleaned = finalHistory
-              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-              .map((m) => ({ ...m, isStreaming: false }));
-            // Merge tool progress messages back in chronologically
-            const merged = [...cleaned, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
-            setMessages(merged);
-            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+            deferUntilDrained(() => {
+              // Collect tool progress messages from current state
+              const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
+              const cleaned = finalHistory
+                .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+                .map((m) => ({ ...m, isStreaming: false }));
+              // Merge tool progress messages back in chronologically
+              const merged = [...cleaned, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+              setMessages(merged);
+              if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+              streamingLockRef.current = false;
+              setIsStreaming(false);
+              setTimeout(() => drainPendingAnalysis(), 0);
+            });
           },
           onError: (error) => {
             setMessages((prev) => {
@@ -398,12 +423,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         return prev;
       });
     } finally {
-      streamingLockRef.current = false;
-      setIsStreaming(false);
-      // Process any queued auto-analysis that arrived while streaming
-      setTimeout(() => drainPendingAnalysis(), 0);
+      // Only clean up if no deferred completion is pending (it will handle cleanup)
+      if (!pendingCompletionRef.current) {
+        streamingLockRef.current = false;
+        setIsStreaming(false);
+        setTimeout(() => drainPendingAnalysis(), 0);
+      }
     }
-  }, [isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, drainPendingAnalysis, handleTransformationResult]);
+  }, [isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, deferUntilDrained, drainPendingAnalysis, handleTransformationResult]);
 
   const initWithPhoto = useCallback(async (imageUrl: string) => {
     // Run photo analysis
@@ -443,14 +470,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           },
           onComplete: (finalHistory) => {
-            flushTokenQueue();
-            setMessages(
-              finalHistory
-                .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
-                .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-                .map((m) => ({ ...m, isStreaming: false })),
-            );
-            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+            deferUntilDrained(() => {
+              setMessages(
+                finalHistory
+                  .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
+                  .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+                  .map((m) => ({ ...m, isStreaming: false })),
+              );
+              if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+              setIsStreaming(false);
+            });
           },
           onError: () => {
             setMessages([{
@@ -473,9 +502,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         isStreaming: false,
       }]);
     } finally {
-      setIsStreaming(false);
+      if (!pendingCompletionRef.current) {
+        setIsStreaming(false);
+      }
     }
-  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, handleTransformationResult]);
+  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, deferUntilDrained, handleTransformationResult]);
 
   const restoreSession = useCallback(async (data: {
     messages: ChatMessage[];
@@ -560,16 +591,18 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           },
           onComplete: (finalHistory) => {
-            flushTokenQueue();
-            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
-            // Filter out the synthetic resume trigger and empty assistant messages
-            const filtered = finalHistory
-              .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
-              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-              .map((m) => ({ ...m, isStreaming: false }));
-            const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
-            setMessages(merged);
-            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+            deferUntilDrained(() => {
+              const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
+              // Filter out the synthetic resume trigger and empty assistant messages
+              const filtered = finalHistory
+                .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
+                .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+                .map((m) => ({ ...m, isStreaming: false }));
+              const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+              setMessages(merged);
+              if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+              setIsStreaming(false);
+            });
           },
           onError: () => {
             setMessages((prev) => {
@@ -587,14 +620,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         sogniClient
       );
 
-      // Filter out synthetic trigger from final state
-      const finalMessages = welcomeHistory
-        .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
-        .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-        .map((m) => ({ ...m, isStreaming: false }));
-      const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
-      const merged = [...finalMessages, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
-      setMessages(merged);
+      // Filter out synthetic trigger from final state (only if no deferred typing in progress)
+      if (!pendingCompletionRef.current) {
+        const finalMessages = welcomeHistory
+          .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
+          .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+          .map((m) => ({ ...m, isStreaming: false }));
+        const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
+        const merged = [...finalMessages, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+        setMessages(merged);
+      }
     } catch {
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -611,9 +646,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         return prev;
       });
     } finally {
-      setIsStreaming(false);
+      if (!pendingCompletionRef.current) {
+        setIsStreaming(false);
+      }
     }
-  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, handleTransformationResult]);
+  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, deferUntilDrained, handleTransformationResult]);
 
   const notifyTransformationSelected = useCallback((transformation: GeneratedTransformation) => {
     // Add an informational message to chat history (no LLM invocation).
@@ -680,16 +717,19 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       // React batching — override getEditStack with a fallback so that
       // compare_before_after / analyze_result can still access the result.
       const originalGetEditStack = toolContext.getEditStack;
+      const syntheticStep = {
+        transformation: { id: 'pending', name: transformation.name, category: 'ai-generated' as const, subcategory: 'chat', prompt: transformation.prompt, icon: '' },
+        resultImageUrl: resultUrl,
+        resultImageBase64: '',
+        timestamp: Date.now(),
+      };
       toolContext.getEditStack = () => {
         const stack = originalGetEditStack();
-        if (stack.length > 0) return stack;
-        // Fallback: synthesize a minimal step from the data we already have
-        return [{
-          transformation: { id: 'pending', name: transformation.name, category: 'ai-generated' as const, subcategory: 'chat', prompt: transformation.prompt, icon: '' },
-          resultImageUrl: resultUrl,
-          resultImageBase64: '',
-          timestamp: Date.now(),
-        }];
+        // If the stack already contains this step, return as-is
+        if (stack.some((s) => s.resultImageUrl === resultUrl)) return stack;
+        // Append the synthetic step — the real stack may have older entries
+        // but not this one yet due to React batching
+        return [...stack, syntheticStep];
       };
 
       await sendChatMessage(
@@ -767,16 +807,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           },
           onComplete: (finalHistory) => {
-            flushTokenQueue();
-            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
-            // Filter out the synthetic trigger message and empty assistant messages
-            const filtered = finalHistory
-              .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
-              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-              .map((m) => ({ ...m, isStreaming: false }));
-            const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
-            setMessages(merged);
-            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+            deferUntilDrained(() => {
+              const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
+              // Filter out the synthetic trigger message and empty assistant messages
+              const filtered = finalHistory
+                .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
+                .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+                .map((m) => ({ ...m, isStreaming: false }));
+              const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+              setMessages(merged);
+              if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+              isAutoAnalyzingRef.current = false;
+              setIsStreaming(false);
+              setTimeout(() => drainPendingAnalysis(), 0);
+            });
           },
           onError: (error) => {
             setMessages((prev) => {
@@ -798,12 +842,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } catch (error) {
       console.error('[useChat] Auto-analysis error:', error);
     } finally {
-      isAutoAnalyzingRef.current = false;
-      setIsStreaming(false);
-      // Drain any pending analysis queued during this run (continues auto-pilot loop)
-      setTimeout(() => drainPendingAnalysis(), 0);
+      // Only clean up if no deferred completion is pending (it will handle cleanup)
+      if (!pendingCompletionRef.current) {
+        isAutoAnalyzingRef.current = false;
+        setIsStreaming(false);
+        setTimeout(() => drainPendingAnalysis(), 0);
+      }
     }
-  }, [isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult, drainPendingAnalysis]);
+  }, [isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, deferUntilDrained, handleTransformationResult, drainPendingAnalysis]);
 
   // Keep notifyGenerationComplete ref current for deferred drain calls
   notifyGenerationCompleteRef.current = notifyGenerationComplete;
@@ -911,15 +957,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           },
           onComplete: (finalHistory) => {
-            flushTokenQueue();
-            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
-            const filtered = finalHistory
-              .filter((m) => !(m.role === 'user' && m.content.startsWith('[Auto-Pilot activated')))
-              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-              .map((m) => ({ ...m, isStreaming: false }));
-            const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
-            setMessages(merged);
-            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+            deferUntilDrained(() => {
+              const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
+              const filtered = finalHistory
+                .filter((m) => !(m.role === 'user' && m.content.startsWith('[Auto-Pilot activated')))
+                .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+                .map((m) => ({ ...m, isStreaming: false }));
+              const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+              setMessages(merged);
+              if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+              streamingLockRef.current = false;
+              isAutoAnalyzingRef.current = false;
+              setIsStreaming(false);
+              setTimeout(() => drainPendingAnalysis(), 0);
+            });
           },
           onError: (error) => {
             setMessages((prev) => {
@@ -944,13 +995,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         return prev;
       });
     } finally {
-      streamingLockRef.current = false;
-      isAutoAnalyzingRef.current = false;
-      setIsStreaming(false);
-      // Drain any pending analysis queued during this run (continues auto-pilot loop)
-      setTimeout(() => drainPendingAnalysis(), 0);
+      // Only clean up if no deferred completion is pending (it will handle cleanup)
+      if (!pendingCompletionRef.current) {
+        streamingLockRef.current = false;
+        isAutoAnalyzingRef.current = false;
+        setIsStreaming(false);
+        setTimeout(() => drainPendingAnalysis(), 0);
+      }
     }
-  }, [buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult, drainPendingAnalysis]);
+  }, [buildToolContext, sogniClient, enqueueToken, flushTokenQueue, deferUntilDrained, handleTransformationResult, drainPendingAnalysis]);
 
   const disableAutoPilot = useCallback(() => {
     setIsAutoPilot(false);

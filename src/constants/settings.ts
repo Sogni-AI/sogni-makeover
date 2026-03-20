@@ -27,9 +27,9 @@ export interface ModelOption {
 
 export const MODEL_OPTIONS: ModelOption[] = [
   {
-    label: 'Qwen Lightning',
-    value: QWEN_LIGHTNING_MODEL_ID,
-    defaults: { steps: 4, guidance: 1, sampler: 'euler', scheduler: 'simple' },
+    label: 'Flux.2 [dev]',
+    value: FLUX2_DEV_MODEL_ID,
+    defaults: { steps: 36, guidance: 4, sampler: 'euler', scheduler: 'simple' },
   },
   {
     label: 'Qwen 2511',
@@ -37,9 +37,9 @@ export const MODEL_OPTIONS: ModelOption[] = [
     defaults: { steps: 25, guidance: 2.5, sampler: 'euler', scheduler: 'simple' },
   },
   {
-    label: 'Flux.2 [dev]',
-    value: FLUX2_DEV_MODEL_ID,
-    defaults: { steps: 36, guidance: 4, sampler: 'euler', scheduler: 'simple' },
+    label: 'Qwen Lightning',
+    value: QWEN_LIGHTNING_MODEL_ID,
+    defaults: { steps: 4, guidance: 1, sampler: 'euler', scheduler: 'simple' },
   },
 ];
 
