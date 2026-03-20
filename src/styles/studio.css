@@ -435,8 +435,7 @@
 .pitch-bubble {
   position: absolute;
   bottom: calc(100% + 14px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   width: max-content;
   max-width: 240px;
   padding: 8px 14px;
@@ -460,7 +459,7 @@
   content: '';
   position: absolute;
   top: 100%;
-  left: 50%;
+  left: 20px;
   transform: translateX(-50%);
   border: 7px solid transparent;
   border-top-color: rgba(20, 17, 15, 0.95);
@@ -471,7 +470,7 @@
   content: '';
   position: absolute;
   top: 100%;
-  left: 50%;
+  left: 20px;
   transform: translateX(-50%);
   border: 8px solid transparent;
   border-top-color: rgba(212, 163, 115, 0.2);
