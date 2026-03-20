@@ -85,6 +85,7 @@ export interface GeneratedCategory {
 
 export interface MakeoverToolContext {
   generateFromPrompt: (params: {
+    name?: string;
     prompt: string;
     intensity?: number;
     negativePrompt?: string;

@@ -104,7 +104,7 @@ function MakeoverStudio() {
           currentIndex: idx,
           mode: editStackRef.current.mode,
         },
-        chatMessages: chatMessagesRef.current,
+        chatMessages: chatMessagesRef.current.filter((m) => !m.isToolProgress),
         photoAnalysis: chatPhotoAnalysisRef.current,
         generatedCategories: chatGeneratedCategoriesRef.current,
         selectedGender: selectedGenderRef.current,
@@ -163,6 +163,21 @@ function MakeoverStudio() {
     }
   }, [isGenerating]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Disable auto-pilot when user navigates backward in edit history (undo / go-to-step)
+  const prevEditIndexRef = useRef(editStack.currentIndex);
+  useEffect(() => {
+    const prev = prevEditIndexRef.current;
+    prevEditIndexRef.current = editStack.currentIndex;
+    if (editStack.currentIndex < prev && chat.isAutoPilot) {
+      chat.disableAutoPilot();
+    }
+  }, [editStack.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCancelGeneration = useCallback(() => {
+    cancelGeneration();
+    chat.disableAutoPilot();
+  }, [cancelGeneration, chat]);
+
   const handleCategoryChange = useCallback((categoryName: string) => {
     setSelectedCategory(categoryName);
   }, []);
@@ -190,8 +205,9 @@ function MakeoverStudio() {
   );
 
   const handleBack = useCallback(() => {
+    chat.disableAutoPilot();
     resetPhoto();
-  }, [resetPhoto]);
+  }, [resetPhoto, chat]);
 
   const handleToggleChat = useCallback(() => {
     chat.toggleChat();
@@ -270,7 +286,7 @@ function MakeoverStudio() {
                 generationProgress.status !== 'completed' && (
                 <GenerationProgress
                   progress={generationProgress}
-                  onCancel={cancelGeneration}
+                  onCancel={handleCancelGeneration}
                   onDismiss={() => setGenerationProgress(null)}
                   transformationName={currentTransformation?.name}
                 />

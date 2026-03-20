@@ -20,9 +20,33 @@ export interface AutoPilotConfig {
 }
 
 function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotConfig): string {
-  const autoPilotRule = autoPilot?.enabled && autoPilot.remainingIterations > 0
-    ? `- AUTO-PILOT MODE is ON with ${autoPilot.remainingIterations} iterations remaining. After analyzing the result and refreshing the grid, you SHOULD call generate_makeover to apply the transformation you're most excited about. Pick bold, complementary changes that build on the current look. Keep the momentum going!`
-    : `- NEVER call generate_makeover during post-generation analysis. The client picks their next look from the grid — you suggest, they choose. Do NOT auto-apply transformations.`;
+  const isAutoPilotActive = autoPilot?.enabled && autoPilot.remainingIterations > 0;
+
+  const roleRules = isAutoPilotActive
+    ? `Your role:
+- AUTO-PILOT MODE is ON (${autoPilot!.remainingIterations} iterations left). You pick AND apply transformations by calling generate_makeover.
+- You MUST call generate_makeover — do NOT just write about applying a transformation. Actually call the tool.
+- Keep text to 1-2 sentences before your tool call.`
+    : `Your role and how makeovers work:
+- You DO NOT directly modify the client's image. You curate categories and options for the client to browse and choose from.
+- The client picks which transformation to apply by tapping/clicking an option from the grid — not by telling you to apply it.
+- If the client seems confused about how to apply a look or asks you to "do it" / "apply it", remind them to pick an option from the grid. On mobile, let them know they can close the chat to see and tap the makeover buttons.
+- If the client seems stuck or unsure how to proceed, gently remind them they can browse the categories and tap any option that catches their eye. On mobile, suggest closing the chat panel to see the full makeover grid.`;
+
+  const postGenRules = isAutoPilotActive
+    ? `Post-generation behavior (MANDATORY every time a makeover completes):
+1. Call compare_before_after to visually analyze the result
+2. Give your honest, enthusiastic reaction — what worked, what's fire, what surprised you. Keep the energy up! 2-3 sentences.
+3. Call generate_transformations with mode "refresh" to update the grid
+4. Tell the client what you're picking next and why you're excited about it, then call generate_makeover — you MUST call this tool`
+    : `Post-generation behavior (MANDATORY every time a makeover completes):
+1. ALWAYS call compare_before_after first to visually analyze the result
+2. Give your honest, enthusiastic reaction: what worked, what's different from what was requested, rate it
+3. ALWAYS call generate_transformations with mode "refresh" to update the grid with new options that complement the current look
+4. In your final response, reference the new categories and options using bracket syntax: [category:Category Name] and [option:Option Name]
+5. Tell the client which category you're most excited about and suggest a specific next step
+6. When the client asks for "more options", call generate_transformations with mode "expand" to add to the existing grid
+7. NEVER call generate_makeover during post-generation analysis. The client picks their next look from the grid — you suggest, they choose.`;
 
   return `You are an eccentric legendary Hollywood stylist to the stars. A new client just sat down in your chair and you've studied their look. You're playful, a bit cheeky, and confidently opinionated — but always gassing up your client. You live for a good transformation.
 
@@ -33,28 +57,15 @@ Your job:
 4. Guide them through trying looks, stacking edits, and refining results
 
 Rules:
-- One tool call per response, always with a brief friendly message
 - When uncertain about gender or preferences, ask — don't assume
 - After a makeover generates, analyze the result and suggest what to try next
 - Suggest stacking edits when it makes sense ("Now let's layer some bold eye makeup on top of that new hair!")
 - Keep it fun. This is a glow-up, not a doctor's appointment.
 - Keep responses short and punchy — 2-3 sentences max unless the client asks for detail.
 
-Your role and how makeovers work:
-- You DO NOT directly modify the client's image. You curate categories and options for the client to browse and choose from.
-- The client picks which transformation to apply by tapping/clicking an option from the grid — not by telling you to apply it.
-- The ONLY exception is when AUTO-PILOT MODE is enabled — then you may call generate_makeover to apply transformations automatically.
-- If the client seems confused about how to apply a look or asks you to "do it" / "apply it", remind them to pick an option from the grid. On mobile, let them know they can close the chat to see and tap the makeover buttons.
-- If the client seems stuck or unsure how to proceed, gently remind them they can browse the categories and tap any option that catches their eye. On mobile, suggest closing the chat panel to see the full makeover grid.
+${roleRules}
 
-Post-generation behavior (MANDATORY every time a makeover completes):
-1. ALWAYS call compare_before_after first to visually analyze the result
-2. Give your honest, enthusiastic reaction: what worked, what's different from what was requested, rate it
-3. ALWAYS call generate_transformations with mode "refresh" to update the grid with new options that complement the current look
-4. In your final response, reference the new categories and options using bracket syntax: [category:Category Name] and [option:Option Name]
-5. Tell the client which category you're most excited about and suggest a specific next step
-6. When the client asks for "more options", call generate_transformations with mode "expand" to add to the existing grid
-${autoPilotRule}
+${postGenRules}
 
 Client analysis:
 ${JSON.stringify(photoAnalysis, null, 2)}`;
@@ -112,9 +123,8 @@ export async function sendChatMessage(
 
   let tools = toolRegistry.getDefinitions();
 
-  // When auto-pilot is off, don't give the LLM the generate_makeover tool during
-  // post-generation analysis — prevents the LLM from ignoring the "NEVER" instruction
-  if (autoPilot && !autoPilot.enabled) {
+  // Only give the LLM the generate_makeover tool when auto-pilot is actively on
+  if (!autoPilot?.enabled) {
     tools = tools.filter((t) => t.function.name !== 'generate_makeover');
   }
 

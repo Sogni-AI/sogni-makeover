@@ -23,6 +23,7 @@ interface UseChatOptions {
   getEditStackDepth: () => number;
   isGenerating: () => boolean;
   generateFromPrompt: (params: {
+    name?: string;
     prompt: string;
     intensity?: number;
     negativePrompt?: string;
@@ -45,6 +46,7 @@ export interface UseChatReturn {
   closeChat: () => void;
   toggleChat: () => void;
   toggleAutoPilot: () => void;
+  disableAutoPilot: () => void;
   notifyTransformationSelected: (transformation: GeneratedTransformation) => void;
   notifyGenerationComplete: (transformation: { name: string; prompt: string }, resultUrl: string) => Promise<void>;
   initWithPhoto: (imageUrl: string) => Promise<void>;
@@ -482,7 +484,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   }) => {
     const restoredMessages = data.messages.filter(
       (m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length),
-    );
+    ).filter((m) => !m.isToolProgress);
     setMessages(restoredMessages);
     if (data.photoAnalysis) {
       photoAnalysisRef.current = data.photoAnalysis;
@@ -735,7 +737,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 {
                   id: `tp-${Date.now()}-start`,
                   role: 'assistant' as const,
-                  content: getToolMessage(toolCall.name),
+                  content: getToolMessage(toolCall.name, true),
                   timestamp: Date.now(),
                   isStreaming: false,
                   isToolProgress: true,
@@ -758,6 +760,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
+            }
+            if (toolCall.name === 'generate_makeover' && !result.success) {
+              setIsAutoPilot(false);
+              autoPilotIterationsRef.current = 0;
             }
           },
           onComplete: (finalHistory) => {
@@ -899,6 +905,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
+            if (toolCall.name === 'generate_makeover' && !result.success) {
+              setIsAutoPilot(false);
+              autoPilotIterationsRef.current = 0;
+            }
           },
           onComplete: (finalHistory) => {
             flushTokenQueue();
@@ -942,6 +952,31 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }
   }, [buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult, drainPendingAnalysis]);
 
+  const disableAutoPilot = useCallback(() => {
+    setIsAutoPilot(false);
+    if (autoPilotTimerRef.current) {
+      clearTimeout(autoPilotTimerRef.current);
+      autoPilotTimerRef.current = null;
+    }
+    autoPilotIterationsRef.current = 0;
+    // Clear any queued analysis so it doesn't fire after auto-pilot is off
+    pendingAnalysisRef.current = null;
+    // If streaming from an auto-pilot action, clean up the frozen state
+    if (isAutoAnalyzingRef.current) {
+      isAutoAnalyzingRef.current = false;
+      streamingLockRef.current = false;
+      setIsStreaming(false);
+      // Finalize any streaming message
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.isStreaming) {
+          return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+        }
+        return prev;
+      });
+    }
+  }, []);
+
   const toggleAutoPilot = useCallback(() => {
     setIsAutoPilot((prev) => {
       const next = !prev;
@@ -976,6 +1011,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     closeChat,
     toggleChat,
     toggleAutoPilot,
+    disableAutoPilot,
     notifyTransformationSelected,
     notifyGenerationComplete,
     initWithPhoto,
@@ -1009,14 +1045,14 @@ async function resizeForVision(imageUrl: string): Promise<string> {
   });
 }
 
-function getToolMessage(toolName: string): string {
+function getToolMessage(toolName: string, isPostGeneration?: boolean): string {
   switch (toolName) {
     case 'generate_makeover': return 'Creating your makeover...';
     case 'analyze_result': return 'Studying the result...';
     case 'compare_before_after': return 'Comparing before and after...';
     case 'adjust_intensity': return 'Adjusting intensity...';
     case 'stack_transformation': return 'Layering another look...';
-    case 'generate_transformations': return 'Curating your looks...';
+    case 'generate_transformations': return isPostGeneration ? 'Refreshing your options...' : 'Curating your looks...';
     default: return 'Working on it...';
   }
 }

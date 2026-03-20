@@ -1098,6 +1098,7 @@ export function AppProvider({ children }: AppProviderProps) {
    */
   const generateFromPrompt = useCallback(
     async (params: {
+      name?: string;
       prompt: string;
       intensity?: number;
       negativePrompt?: string;
@@ -1112,7 +1113,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
       const syntheticTransformation: Transformation = {
         id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: params.prompt.slice(0, 30) + (params.prompt.length > 30 ? '...' : ''),
+        name: params.name || params.prompt.slice(0, 30) + (params.prompt.length > 30 ? '...' : ''),
         category: 'ai-generated' as TransformationCategory,
         subcategory: 'chat',
         prompt: params.prompt,
