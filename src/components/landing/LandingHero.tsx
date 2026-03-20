@@ -56,9 +56,9 @@ const itemVariants = {
 };
 
 const QUALITY_TIERS = [
-  { label: 'Make it fast!', modelId: QWEN_LIGHTNING_MODEL_ID },
-  { label: 'Good looks take time.', modelId: QWEN_STANDARD_MODEL_ID },
   { label: 'Pro Tier Quality', modelId: FLUX2_DEV_MODEL_ID },
+  { label: 'Good looks take time.', modelId: QWEN_STANDARD_MODEL_ID },
+  { label: 'Make it fast!', modelId: QWEN_LIGHTNING_MODEL_ID },
 ] as const;
 
 function LandingHero() {
@@ -311,8 +311,8 @@ function LandingHero() {
               ) : (
                 <motion.div
                   key="quality-select"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1, transition: { duration: 0.3 } }}
                   className="flex flex-col items-center gap-3"
                 >
                   {QUALITY_TIERS.map((tier, i) => {
