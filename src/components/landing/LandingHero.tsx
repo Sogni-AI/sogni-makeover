@@ -275,14 +275,14 @@ function LandingHero() {
             See how you look before making any real changes.
           </motion.p>
 
-          <motion.div variants={itemVariants} className="mt-6 flex flex-col items-center gap-4 lg:mt-6">
-            <AnimatePresence mode="wait">
+          <motion.div variants={itemVariants} className="relative mt-6 flex flex-col items-center gap-4 lg:mt-6" style={{ minHeight: '160px' }}>
+            <AnimatePresence>
               {step === 'idle' ? (
                 <motion.div
                   key="start-button"
-                  initial={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.3 } }}
-                  className="flex flex-col items-center gap-4"
+                  initial={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                  className="absolute inset-x-0 flex flex-col items-center gap-4"
                 >
                   <Button
                     variant="primary"
@@ -312,8 +312,8 @@ function LandingHero() {
                 <motion.div
                   key="quality-select"
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: 1, transition: { duration: 0.3 } }}
-                  className="flex flex-col items-center gap-3"
+                  animate={{ opacity: 1, transition: { duration: 0.2 } }}
+                  className="absolute inset-x-0 flex flex-col items-center gap-3"
                 >
                   {QUALITY_TIERS.map((tier, i) => {
                     const isCurrentDefault = settings.defaultModel === tier.modelId;
@@ -322,11 +322,11 @@ function LandingHero() {
                         key={tier.modelId}
                         aria-label={`Quality: ${tier.label}`}
                         aria-pressed={isCurrentDefault}
-                        initial={{ y: 20, opacity: 0 }}
+                        initial={{ y: 10, opacity: 0 }}
                         animate={{
                           y: 0,
                           opacity: 1,
-                          transition: { delay: 0.1 + i * 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+                          transition: { delay: i * 0.05, duration: 0.25, ease: [0.22, 1, 0.36, 1] },
                         }}
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}

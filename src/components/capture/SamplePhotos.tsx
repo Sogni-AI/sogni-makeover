@@ -68,7 +68,7 @@ function SamplePhotos() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 0.3 }}
-      className="mt-12"
+      className="mt-8 sm:mt-12"
     >
       <p className="text-center text-[11px] font-medium uppercase tracking-[0.2em] text-white/20">
         Or try with a sample photo
@@ -122,7 +122,7 @@ function SamplePhotos() {
               whileHover={{ scale: 1.08, y: -2 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => handleSampleClick(sample.src, sample.id)}
-              className="aspect-[2/3] w-[60px] flex-shrink-0 overflow-hidden rounded-lg border border-primary-400/[0.06] transition-all hover:border-primary-400/20 hover:shadow-lg hover:shadow-primary-400/5 sm:w-[80px] sm:rounded-xl lg:w-[120px]"
+              className="aspect-[2/3] w-[88px] flex-shrink-0 overflow-hidden rounded-lg border border-primary-400/[0.06] transition-all hover:border-primary-400/20 hover:shadow-lg hover:shadow-primary-400/5 sm:w-[100px] sm:rounded-xl lg:w-[120px]"
               aria-label={`Use ${sample.label}`}
             >
               <img

@@ -8,7 +8,7 @@ export const QWEN_LIGHTNING_MODEL_ID = 'qwen_image_edit_2511_fp8_lightning';
 export const QWEN_STANDARD_MODEL_ID = 'qwen_image_edit_2511_fp8';
 export const FLUX2_DEV_MODEL_ID = 'flux2_dev_fp8';
 
-export const DEFAULT_MODEL = QWEN_LIGHTNING_MODEL_ID;
+export const DEFAULT_MODEL = FLUX2_DEV_MODEL_ID;
 
 // ---------------------------------------------------------------------------
 // Per-model defaults (pulled from sogni-photobooth)
@@ -56,8 +56,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultModel: DEFAULT_MODEL,
   defaultWidth: 1024,
   defaultHeight: 1536,
-  defaultGuidance: 1,
-  defaultSteps: 4,
+  defaultGuidance: 4,
+  defaultSteps: 30,
   defaultSampler: 'euler',
   defaultScheduler: 'simple',
   outputFormat: 'jpg',
