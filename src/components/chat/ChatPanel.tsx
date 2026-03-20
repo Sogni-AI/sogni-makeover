@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatMessage from '@/components/chat/ChatMessage';
 import ChatInput from '@/components/chat/ChatInput';
@@ -34,6 +34,30 @@ function ChatPanel({
   onHighlightTransformation,
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const PAGE_SIZE = 20;
+  const visibleMessages = messages.filter((m) => m.role !== 'tool' && m.role !== 'system');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when the first message changes (new session)
+  const firstMessageId = visibleMessages.length > 0 ? visibleMessages[0]?.id : null;
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [firstMessageId]);
+
+  const paginatedMessages = visibleMessages.slice(
+    Math.max(0, visibleMessages.length - visibleCount),
+  );
+  const hasMore = visibleCount < visibleMessages.length;
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el || !hasMore) return;
+    if (el.scrollTop < 50) {
+      setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, visibleMessages.length));
+    }
+  }, [hasMore, visibleMessages.length]);
 
   // Auto-scroll when a new message is added (not on every streaming token)
   useEffect(() => {
@@ -71,21 +95,31 @@ function ChatPanel({
           </div>
 
           {/* Messages */}
-          <div className="relative z-10 flex-1 overflow-y-auto px-3 py-3">
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="relative z-10 flex-1 overflow-y-auto px-3 py-3"
+          >
             <div className="flex flex-col gap-3">
-              {messages
-                .filter((m) => m.role !== 'tool' && m.role !== 'system')
-                .map((message) => (
-                  <ChatMessage
-                    key={message.id}
-                    message={message}
-                    toolProgress={
-                      message.isStreaming ? currentToolProgress : null
-                    }
-                    onSelectCategory={onSelectCategory}
-                    onSelectTransformation={onHighlightTransformation}
-                  />
-                ))}
+              {hasMore && (
+                <button
+                  onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, visibleMessages.length))}
+                  className="self-center rounded-full bg-white/5 px-3 py-1 text-[10px] text-white/40 transition-colors hover:bg-white/10 hover:text-white/60"
+                >
+                  Load earlier messages
+                </button>
+              )}
+              {paginatedMessages.map((message) => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  toolProgress={
+                    message.isStreaming ? currentToolProgress : null
+                  }
+                  onSelectCategory={onSelectCategory}
+                  onSelectTransformation={onHighlightTransformation}
+                />
+              ))}
               <div ref={messagesEndRef} />
             </div>
           </div>
