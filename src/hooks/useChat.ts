@@ -593,7 +593,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       // Drain any pending analysis queued during this run (continues auto-pilot loop)
       setTimeout(() => drainPendingAnalysis(), 0);
     }
-  }, [isStreaming, isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult, drainPendingAnalysis]);
+  }, [isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult, drainPendingAnalysis]);
 
   // Keep notifyGenerationComplete ref current for deferred drain calls
   notifyGenerationCompleteRef.current = notifyGenerationComplete;
