@@ -12,6 +12,7 @@ import DemoBanner from '@/components/auth/DemoBanner';
 import { useMakeoverCostEstimate } from '@/hooks/useMakeoverCostEstimate';
 import { useWallet } from '@/hooks/useWallet';
 import { formatTokenAmount, getTokenLabel } from '@/services/walletService';
+import { saveSession } from '@/utils/makeoverSessionDb';
 import '@/styles/studio.css';
 
 function MakeoverStudio() {
@@ -35,6 +36,11 @@ function MakeoverStudio() {
     cancelEnhancement,
     editStack,
     sogniClient,
+    isResumedSession,
+    saveSessionRef,
+    pendingResumeData,
+    clearPendingResumeData,
+    selectedGender,
   } = useApp();
 
   const { tokenCost, usdCost, isLoading: costLoading } = useMakeoverCostEstimate();
@@ -50,6 +56,9 @@ function MakeoverStudio() {
     const step = editStack.currentStep;
     currentResultUrlRef.current = step?.resultImageUrl ?? null;
   }, [editStack.currentStep]);
+
+  const selectedGenderRef = useRef(selectedGender);
+  selectedGenderRef.current = selectedGender;
 
   // Initialize chat hook
   const chat = useChat({
@@ -70,6 +79,34 @@ function MakeoverStudio() {
   const generatedCategories = chat.generatedCategories;
   const isCategoriesLoading = chat.isStreaming && generatedCategories.length === 0;
 
+  const chatMessagesRef = useRef(chat.messages);
+  chatMessagesRef.current = chat.messages;
+  const chatPhotoAnalysisRef = useRef(chat.photoAnalysis);
+  chatPhotoAnalysisRef.current = chat.photoAnalysis;
+  const chatGeneratedCategoriesRef = useRef(chat.generatedCategories);
+  chatGeneratedCategoriesRef.current = chat.generatedCategories;
+
+  useEffect(() => {
+    saveSessionRef.current = () => {
+      if (!originalImageBase64) return;
+      saveSession({
+        version: 1,
+        originalImageBase64,
+        editStack: {
+          steps: editStackRef.current.steps,
+          currentIndex: editStackRef.current.currentIndex,
+          mode: editStackRef.current.mode,
+        },
+        chatMessages: chatMessagesRef.current,
+        photoAnalysis: chatPhotoAnalysisRef.current,
+        generatedCategories: chatGeneratedCategoriesRef.current,
+        selectedGender: selectedGenderRef.current,
+        timestamp: Date.now(),
+      });
+    };
+    return () => { saveSessionRef.current = null; };
+  }, [originalImageBase64]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [activeTransformationId, setActiveTransformationId] = useState<string | null>(null);
   const [showAutoPilotTip, setShowAutoPilotTip] = useState(false);
@@ -79,9 +116,23 @@ function MakeoverStudio() {
   useEffect(() => {
     if (originalImageUrl && !initTriggered.current) {
       initTriggered.current = true;
+      if (isResumedSession) {
+        return;
+      }
       chat.initWithPhoto(originalImageUrl);
     }
   }, [originalImageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isResumedSession && pendingResumeData) {
+      chat.restoreSession({
+        messages: pendingResumeData.chatMessages,
+        photoAnalysis: pendingResumeData.photoAnalysis,
+        generatedCategories: pendingResumeData.generatedCategories,
+      });
+      clearPendingResumeData();
+    }
+  }, [isResumedSession, pendingResumeData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selected category when categories arrive
   useEffect(() => {

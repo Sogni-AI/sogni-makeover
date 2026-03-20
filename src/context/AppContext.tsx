@@ -32,6 +32,11 @@ import type { EditMode } from '@/types';
 import { useEditStack } from '@/hooks/useEditStack';
 import type { UseEditStackReturn } from '@/hooks/useEditStack';
 import { fetchImageAsBase64 } from '@/utils/image';
+import {
+  loadSession as loadSessionFromDb,
+  clearSession as clearSessionFromDb,
+} from '@/utils/makeoverSessionDb';
+import type { ChatMessage, PhotoAnalysis, GeneratedCategory } from '@/types/chat';
 
 // ---------------------------------------------------------------------------
 // Context shape
@@ -95,6 +100,17 @@ interface AppContextValue {
   resetPhoto: () => void;
   logout: () => Promise<void>;
   resetSettings: () => void;
+
+  // Session resume
+  resumeSession: () => Promise<boolean>;
+  isResumedSession: boolean;
+  saveSessionRef: React.MutableRefObject<(() => void) | null>;
+  pendingResumeData: {
+    chatMessages: ChatMessage[];
+    photoAnalysis: PhotoAnalysis | null;
+    generatedCategories: GeneratedCategory[];
+  } | null;
+  clearPendingResumeData: () => void;
 
   // Auto-enhance
   enhancePhoto: (imageBase64: string, client: unknown, isAuthenticated: boolean) => Promise<{ imageUrl: string } | null>;
@@ -182,6 +198,16 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // -- Edit stack --
   const editStack = useEditStack();
+
+  // -- Session resume --
+  const [isResumedSession, setIsResumedSession] = useState(false);
+  const saveSessionRef = useRef<(() => void) | null>(null);
+  const [pendingResumeData, setPendingResumeData] = useState<{
+    chatMessages: ChatMessage[];
+    photoAnalysis: PhotoAnalysis | null;
+    generatedCategories: GeneratedCategory[];
+  } | null>(null);
+  const clearPendingResumeData = useCallback(() => setPendingResumeData(null), []);
 
   // Ref to hold current input image for generation.
   // Avoids adding editStack to generateMakeover's dependency array.
@@ -321,6 +347,44 @@ export function AppProvider({ children }: AppProviderProps) {
     reader.readAsDataURL(file);
   }, []);
 
+  const restoreOriginalImage = useCallback((base64: string) => {
+    const byteString = atob(base64);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([ab], { type: 'image/jpeg' });
+    const file = new File([blob], 'restored-photo.jpg', { type: 'image/jpeg' });
+    setOriginalImageRaw(file);
+    setOriginalImageUrl(URL.createObjectURL(blob));
+    setOriginalImageBase64(base64);
+  }, []);
+
+  const resumeSession = useCallback(async (): Promise<boolean> => {
+    const session = await loadSessionFromDb();
+    if (!session) return false;
+
+    restoreOriginalImage(session.originalImageBase64);
+    editStack.restore(session.editStack);
+
+    if (session.selectedGender) {
+      setSelectedGenderRaw(session.selectedGender);
+    }
+
+    setPendingResumeData({
+      chatMessages: session.chatMessages,
+      photoAnalysis: session.photoAnalysis,
+      generatedCategories: session.generatedCategories,
+    });
+
+    setIsResumedSession(true);
+    setCurrentView('studio');
+
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restoreOriginalImage and editStack.restore are stable callbacks
+  }, []);
+
   /**
    * Reset the photo back to capture state.
    */
@@ -332,6 +396,8 @@ export function AppProvider({ children }: AppProviderProps) {
     setGenerationProgress(null);
     setCurrentResult(null);
     editStack.reset();
+    clearSessionFromDb();
+    setIsResumedSession(false);
     setCurrentView('capture');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editStack.reset is a stable callback (useCallback with [] deps)
   }, []);
@@ -693,6 +759,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
           fetchImageAsBase64(resultImageUrl).then(base64 => {
             editStack.updateLatestBase64(base64);
+            saveSessionRef.current?.();
           }).catch(() => {
             // Non-critical — will be fetched on-demand if needed
           });
@@ -911,6 +978,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
                 fetchImageAsBase64(result.imageUrl).then(base64 => {
                   editStack.updateLatestBase64(base64);
+                  saveSessionRef.current?.();
                 }).catch(() => {
                   // Non-critical
                 });
@@ -1100,6 +1168,11 @@ export function AppProvider({ children }: AppProviderProps) {
         resetPhoto,
         logout,
         resetSettings,
+        resumeSession,
+        isResumedSession,
+        saveSessionRef,
+        pendingResumeData,
+        clearPendingResumeData,
         enhancePhoto,
         enhanceProgress,
         isEnhancing,
