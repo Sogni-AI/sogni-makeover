@@ -4,7 +4,7 @@ import { useApp } from '@/context/AppContext';
 
 const EXCLUDED = new Set([6, 7]);
 
-const allSamples = Array.from({ length: 29 }, (_, i) => i + 1)
+const allSamples = Array.from({ length: 33 }, (_, i) => i + 1)
   .filter((n) => !EXCLUDED.has(n))
   .map((n) => ({
     id: `sample-${String(n).padStart(2, '0')}`,
