@@ -13,7 +13,7 @@ interface HeaderProps {
 }
 
 function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
-  const { authState, currentView, setCurrentView, resetPhoto } = useApp();
+  const { authState, currentView, setCurrentView } = useApp();
   const [showReferral, setShowReferral] = useState(false);
 
   return (
@@ -25,7 +25,7 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
     >
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         <button
-          onClick={() => { resetPhoto(); setCurrentView('landing'); }}
+          onClick={() => setCurrentView('landing')}
           className="group flex items-center gap-2.5 transition-opacity hover:opacity-80"
         >
           {/* Geometric diamond logo mark */}
@@ -47,7 +47,7 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
               <motion.button
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
-                onClick={() => { resetPhoto(); setCurrentView('landing'); }}
+                onClick={() => setCurrentView('landing')}
                 className="text-sm text-white/40 transition-colors hover:text-primary-300"
               >
                 Home

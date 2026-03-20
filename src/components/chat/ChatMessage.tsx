@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
 import { Fragment } from 'react';
 import { motion } from 'framer-motion';
-import type { ChatMessage as ChatMessageType, ToolProgress } from '@/types/chat';
+import type { ChatMessage as ChatMessageType } from '@/types/chat';
 
 interface ChatMessageProps {
   message: ChatMessageType;
-  toolProgress?: ToolProgress | null;
   onSelectCategory?: (name: string) => void;
   onSelectTransformation?: (name: string) => void;
 }
@@ -104,10 +103,37 @@ function parseMessageContent(
   return parts.length > 0 ? parts : renderInlineMarkdown(content, 'root');
 }
 
-function ChatMessage({ message, toolProgress, onSelectCategory, onSelectTransformation }: ChatMessageProps) {
+function ChatMessage({ message, onSelectCategory, onSelectTransformation }: ChatMessageProps) {
   if (message.role === 'tool' || message.role === 'system') return null;
 
   const isUser = message.role === 'user';
+
+  // Tool progress messages get compact styling with spinner/check
+  if (message.isToolProgress) {
+    const isDone = message.content === 'Done!' || message.content === 'Failed';
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+        className="flex justify-start"
+      >
+        <div className="flex items-center gap-2 rounded-xl bg-surface-800/50 px-3 py-1.5 text-xs text-white/40">
+          {!isDone ? (
+            <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none">
+              <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+          {message.content}
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -128,19 +154,6 @@ function ChatMessage({ message, toolProgress, onSelectCategory, onSelectTransfor
             <span className="animate-pulse">...</span>
           </span>
         ) : null)}
-
-        {/* Tool progress indicator */}
-        {toolProgress && !isUser && message.isStreaming && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-white/40">
-            {toolProgress.status === 'running' && (
-              <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-                <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-              </svg>
-            )}
-            {toolProgress.message}
-          </div>
-        )}
 
         {/* Inline result thumbnails */}
         {message.imageResults && message.imageResults.length > 0 && (

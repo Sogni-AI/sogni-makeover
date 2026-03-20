@@ -342,7 +342,22 @@ function EditHistoryCarousel() {
 
       {/* ── Action bar (viewing a result) ────────────────────── */}
       {currentIndex >= 0 && (
-        <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-primary-400/10 bg-surface-900/80 px-2 py-1.5 shadow-xl backdrop-blur-md">
+        <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-primary-400/10 bg-surface-900/80 px-2 pb-1.5 pt-1 shadow-xl backdrop-blur-md sm:flex-row sm:gap-1.5 sm:rounded-full sm:pb-1.5 sm:pt-1.5">
+          {steps[currentIndex]?.transformation && (
+            <>
+              <span className="text-[11px] font-medium text-primary-300/80">
+                {steps[currentIndex].transformation.icon} {steps[currentIndex].transformation.name}
+                {editStack.stepCount > 1 && (
+                  <span className="ml-1 text-white/25">
+                    {currentIndex + 1}/{editStack.stepCount}
+                  </span>
+                )}
+              </span>
+              <div className="hidden h-4 w-px bg-primary-400/10 sm:block" />
+              <div className="h-px w-full bg-primary-400/10 sm:hidden" />
+            </>
+          )}
+          <div className="flex items-center gap-1.5">
           <button
             onClick={undo}
             disabled={!canUndo}
@@ -405,6 +420,7 @@ function EditHistoryCarousel() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
             </svg>
           </button>
+          </div>
         </div>
       )}
 

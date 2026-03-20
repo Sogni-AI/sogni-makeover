@@ -5,7 +5,6 @@ import type {
   GeneratedCategory,
   ToolCall,
   ToolResult,
-  ToolProgress,
   MakeoverToolContext,
   GeneratedTransformation,
 } from '@/types/chat';
@@ -36,7 +35,6 @@ export interface UseChatReturn {
   isStreaming: boolean;
   isChatOpen: boolean;
   unreadCount: number;
-  currentToolProgress: ToolProgress | null;
   generatedCategories: GeneratedCategory[];
   photoAnalysis: PhotoAnalysis | null;
   isAutoPilot: boolean;
@@ -72,7 +70,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [currentToolProgress, setCurrentToolProgress] = useState<ToolProgress | null>(null);
+  // Tool progress is now stored as permanent messages — no ephemeral state needed
   const [generatedCategories, setGeneratedCategories] = useState<GeneratedCategory[]>([]);
   const [photoAnalysis, setPhotoAnalysis] = useState<PhotoAnalysis | null>(null);
   const [isAutoPilot, setIsAutoPilot] = useState(false);
@@ -288,32 +286,59 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             });
           },
           onToolCallStart: (toolCall) => {
-            setCurrentToolProgress({
-              toolName: toolCall.name,
-              status: 'running',
-              message: getToolMessage(toolCall.name),
+            flushTokenQueue();
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              let base;
+              if (last?.isStreaming && !last.content.trim()) {
+                // Remove empty streaming placeholder (the "..." bubble)
+                base = prev.slice(0, -1);
+              } else if (last?.isStreaming) {
+                // Finalize streaming message that has content
+                base = [...prev.slice(0, -1), { ...last, isStreaming: false }];
+              } else {
+                base = prev;
+              }
+              return [
+                ...base,
+                {
+                  id: `tp-${Date.now()}-start`,
+                  role: 'assistant' as const,
+                  content: getToolMessage(toolCall.name),
+                  timestamp: Date.now(),
+                  isStreaming: false,
+                  isToolProgress: true,
+                },
+              ];
             });
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
-            setCurrentToolProgress({
-              toolName: toolCall.name,
-              status: result.success ? 'completed' : 'failed',
-              message: result.success ? 'Done!' : (result.error || 'Failed'),
-            });
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `tp-${Date.now()}-done`,
+                role: 'assistant' as const,
+                content: result.success ? 'Done!' : (result.error || 'Failed'),
+                timestamp: Date.now(),
+                isStreaming: false,
+                isToolProgress: true,
+              },
+            ]);
 
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
-
-            // Clear progress after a delay
-            setTimeout(() => setCurrentToolProgress(null), 2000);
           },
           onComplete: (finalHistory) => {
             flushTokenQueue();
+            // Collect tool progress messages from current state
+            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
             const cleaned = finalHistory
               .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
               .map((m) => ({ ...m, isStreaming: false }));
-            setMessages(cleaned);
+            // Merge tool progress messages back in chronologically
+            const merged = [...cleaned, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+            setMessages(merged);
             if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: (error) => {
@@ -538,34 +563,57 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             });
           },
           onToolCallStart: (toolCall) => {
-            setCurrentToolProgress({
-              toolName: toolCall.name,
-              status: 'running',
-              message: getToolMessage(toolCall.name),
+            flushTokenQueue();
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              let base;
+              if (last?.isStreaming && !last.content.trim()) {
+                base = prev.slice(0, -1);
+              } else if (last?.isStreaming) {
+                base = [...prev.slice(0, -1), { ...last, isStreaming: false }];
+              } else {
+                base = prev;
+              }
+              return [
+                ...base,
+                {
+                  id: `tp-${Date.now()}-start`,
+                  role: 'assistant' as const,
+                  content: getToolMessage(toolCall.name),
+                  timestamp: Date.now(),
+                  isStreaming: false,
+                  isToolProgress: true,
+                },
+              ];
             });
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
-            setCurrentToolProgress({
-              toolName: toolCall.name,
-              status: result.success ? 'completed' : 'failed',
-              message: result.success ? 'Done!' : (result.error || 'Failed'),
-            });
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `tp-${Date.now()}-done`,
+                role: 'assistant' as const,
+                content: result.success ? 'Done!' : (result.error || 'Failed'),
+                timestamp: Date.now(),
+                isStreaming: false,
+                isToolProgress: true,
+              },
+            ]);
 
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
-
-            // Clear progress after a delay
-            setTimeout(() => setCurrentToolProgress(null), 2000);
           },
           onComplete: (finalHistory) => {
             flushTokenQueue();
+            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
             // Filter out the synthetic trigger message and empty assistant messages
             const filtered = finalHistory
               .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
               .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
               .map((m) => ({ ...m, isStreaming: false }));
-            setMessages(filtered);
+            const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+            setMessages(merged);
             if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: (error) => {
@@ -655,26 +703,55 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             });
           },
           onToolCallStart: (toolCall) => {
-            setCurrentToolProgress({ toolName: toolCall.name, status: 'running', message: getToolMessage(toolCall.name) });
+            flushTokenQueue();
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              let base;
+              if (last?.isStreaming && !last.content.trim()) {
+                base = prev.slice(0, -1);
+              } else if (last?.isStreaming) {
+                base = [...prev.slice(0, -1), { ...last, isStreaming: false }];
+              } else {
+                base = prev;
+              }
+              return [
+                ...base,
+                {
+                  id: `tp-${Date.now()}-start`,
+                  role: 'assistant' as const,
+                  content: getToolMessage(toolCall.name),
+                  timestamp: Date.now(),
+                  isStreaming: false,
+                  isToolProgress: true,
+                },
+              ];
+            });
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
-            setCurrentToolProgress({
-              toolName: toolCall.name,
-              status: result.success ? 'completed' : 'failed',
-              message: result.success ? 'Done!' : (result.error || 'Failed'),
-            });
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `tp-${Date.now()}-done`,
+                role: 'assistant' as const,
+                content: result.success ? 'Done!' : (result.error || 'Failed'),
+                timestamp: Date.now(),
+                isStreaming: false,
+                isToolProgress: true,
+              },
+            ]);
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
-            setTimeout(() => setCurrentToolProgress(null), 2000);
           },
           onComplete: (finalHistory) => {
             flushTokenQueue();
+            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
             const filtered = finalHistory
               .filter((m) => !(m.role === 'user' && m.content.startsWith('[Auto-Pilot activated')))
               .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
               .map((m) => ({ ...m, isStreaming: false }));
-            setMessages(filtered);
+            const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+            setMessages(merged);
             if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: (error) => {
@@ -726,7 +803,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     isStreaming,
     isChatOpen,
     unreadCount,
-    currentToolProgress,
     generatedCategories,
     photoAnalysis,
     isAutoPilot,

@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import ChatMessage from '@/components/chat/ChatMessage';
 import ChatInput from '@/components/chat/ChatInput';
 import SuggestionChips from '@/components/chat/SuggestionChips';
-import type { ChatMessage as ChatMessageType, ToolProgress } from '@/types/chat';
+import type { ChatMessage as ChatMessageType } from '@/types/chat';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -12,7 +12,6 @@ interface ChatPanelProps {
   isStreaming: boolean;
   isChatOpen: boolean;
   unreadCount: number;
-  currentToolProgress: ToolProgress | null;
   onSendMessage: (text: string) => void;
   onOpen: () => void;
   onClose: () => void;
@@ -41,7 +40,6 @@ function ChatPanel({
   isStreaming,
   isChatOpen,
   unreadCount,
-  currentToolProgress,
   onSendMessage,
   onOpen,
   onClose,
@@ -75,17 +73,24 @@ function ChatPanel({
   const visibleCountTotalRef = useRef(visibleMessages.length);
   visibleCountTotalRef.current = visibleMessages.length;
 
+  // Track whether the user is scrolled near the bottom
+  const isNearBottomRef = useRef(true);
+
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     if (el.scrollTop < 50) {
       setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, visibleCountTotalRef.current));
     }
+    // Consider "near bottom" if within 80px of the bottom
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   }, []);
 
-  // Auto-scroll when a new message is added (not on every streaming token)
+  // Auto-scroll when new messages arrive, but only if user is already at the bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages.length]);
 
   // Get suggestions from the latest assistant message or use defaults
@@ -221,9 +226,6 @@ function ChatPanel({
                     <ChatMessage
                       key={message.id}
                       message={message}
-                      toolProgress={
-                        message.isStreaming ? currentToolProgress : null
-                      }
                       onSelectCategory={handleCategoryFromMessage}
                       onSelectTransformation={handleTransformationFromMessage}
                     />
