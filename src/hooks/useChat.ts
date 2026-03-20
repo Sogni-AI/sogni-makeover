@@ -35,6 +35,7 @@ export interface UseChatReturn {
   messages: ChatMessage[];
   isStreaming: boolean;
   isChatOpen: boolean;
+  unreadCount: number;
   currentToolProgress: ToolProgress | null;
   generatedCategories: GeneratedCategory[];
   photoAnalysis: PhotoAnalysis | null;
@@ -75,6 +76,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [generatedCategories, setGeneratedCategories] = useState<GeneratedCategory[]>([]);
   const [photoAnalysis, setPhotoAnalysis] = useState<PhotoAnalysis | null>(null);
   const [isAutoPilot, setIsAutoPilot] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const isChatOpenRef = useRef(false);
+  isChatOpenRef.current = isChatOpen;
   const autoPilotIterationsRef = useRef(0);
   const MAX_AUTO_PILOT_ITERATIONS = 6;
 
@@ -308,6 +312,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             flushTokenQueue();
             const cleaned = finalHistory.map((m) => ({ ...m, isStreaming: false }));
             setMessages(cleaned);
+            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: (error) => {
             setMessages((prev) => {
@@ -388,6 +393,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           onComplete: (finalHistory) => {
             flushTokenQueue();
             setMessages(finalHistory.map((m) => ({ ...m, isStreaming: false })));
+            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: () => {
             setMessages([{
@@ -550,6 +556,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
               .map((m) => ({ ...m, isStreaming: false }));
             setMessages(filtered);
+            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: (error) => {
             setMessages((prev) => {
@@ -579,9 +586,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   // Keep notifyGenerationComplete ref current for deferred drain calls
   notifyGenerationCompleteRef.current = notifyGenerationComplete;
 
-  const openChat = useCallback(() => setIsChatOpen(true), []);
+  const openChat = useCallback(() => { setIsChatOpen(true); setUnreadCount(0); }, []);
   const closeChat = useCallback(() => setIsChatOpen(false), []);
-  const toggleChat = useCallback(() => setIsChatOpen((prev) => !prev), []);
+  const toggleChat = useCallback(() => setIsChatOpen((prev) => {
+    if (!prev) setUnreadCount(0);
+    return !prev;
+  }), []);
   const autoPilotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const kickOffAutoPilot = useCallback(async () => {
@@ -652,6 +662,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               .filter((m) => !(m.role === 'user' && m.content.startsWith('[Auto-Pilot activated')))
               .map((m) => ({ ...m, isStreaming: false }));
             setMessages(filtered);
+            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: (error) => {
             setMessages((prev) => {
@@ -699,6 +710,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     messages,
     isStreaming,
     isChatOpen,
+    unreadCount,
     currentToolProgress,
     generatedCategories,
     photoAnalysis,

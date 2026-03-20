@@ -13,25 +13,27 @@ function PhotoCapture() {
   const { authState, demoGenerationsRemaining } = useApp();
 
   return (
-    <section className="mx-auto max-w-3xl px-4 py-4 sm:px-6 sm:py-6">
+    <section className={`mx-auto max-w-3xl px-4 sm:px-6 sm:py-6 ${activeTab === 'camera' ? 'py-2' : 'py-4'}`}>
       {!authState.isAuthenticated && (
         <DemoBanner generationsRemaining={demoGenerationsRemaining} />
       )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="text-center"
-      >
-        <h1 className="font-display text-3xl font-medium tracking-tight sm:text-4xl">
-          <span className="text-white/90">Begin Your </span>
-          <span className="font-display italic text-primary-300">Transformation</span>
-        </h1>
-        <p className="mt-2 text-sm font-light text-white/35">
-          Use your camera or upload an existing photo
-        </p>
-      </motion.div>
+      {activeTab !== 'camera' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="text-center"
+        >
+          <h1 className="font-display text-3xl font-medium tracking-tight sm:text-4xl">
+            <span className="text-white/90">Begin Your </span>
+            <span className="font-display italic text-primary-300">Transformation</span>
+          </h1>
+          <p className="mt-2 text-sm font-light text-white/35">
+            Use your camera or upload an existing photo
+          </p>
+        </motion.div>
+      )}
 
       {/* Tab switcher */}
       <motion.div
@@ -82,8 +84,7 @@ function PhotoCapture() {
         {activeTab === 'camera' ? <CameraView /> : <PhotoUpload />}
       </motion.div>
 
-      {/* Sample photos */}
-      <SamplePhotos />
+      {activeTab !== 'camera' && <SamplePhotos />}
     </section>
   );
 }
