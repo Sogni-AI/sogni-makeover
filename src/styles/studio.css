@@ -438,19 +438,20 @@
   left: 0;
   width: max-content;
   max-width: 240px;
-  padding: 8px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(212, 163, 115, 0.2);
-  background: rgba(20, 17, 15, 0.95);
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(45, 38, 32, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 12px;
-  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.4;
   text-align: center;
   pointer-events: auto;
   z-index: 30;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(212, 163, 115, 0.05);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   white-space: normal;
 }
 
@@ -461,20 +462,13 @@
   top: 100%;
   left: 20px;
   transform: translateX(-50%);
-  border: 7px solid transparent;
-  border-top-color: rgba(20, 17, 15, 0.95);
+  border: 6px solid transparent;
+  border-top-color: rgba(45, 38, 32, 0.8);
 }
 
-/* Outer border tail (to match the border) */
+/* No outer border tail needed */
 .pitch-bubble::before {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 20px;
-  transform: translateX(-50%);
-  border: 8px solid transparent;
-  border-top-color: rgba(212, 163, 115, 0.2);
-  z-index: -1;
+  display: none;
 }
 
 /* -------------------------------------------------------------------------- */
