@@ -4,6 +4,7 @@ import { useApp } from '@/context/AppContext';
 import Button from '@/components/common/Button';
 import UserMenu from '@/components/layout/UserMenu';
 import ReferralSharePopup from '@/components/shared/ReferralSharePopup';
+import QualityTierSelect from '@/components/layout/QualityTierSelect';
 
 interface HeaderProps {
   onPurchaseClick?: () => void;
@@ -22,7 +23,7 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
       transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
       className="sticky top-0 z-50 w-full border-b border-primary-400/[0.06] bg-surface-950/80 backdrop-blur-xl"
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         <button
           onClick={() => { resetPhoto(); setCurrentView('landing'); }}
           className="group flex items-center gap-2.5 transition-opacity hover:opacity-80"
@@ -42,14 +43,17 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
 
         <nav className="flex items-center gap-3">
           {currentView !== 'landing' && (
-            <motion.button
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              onClick={() => { resetPhoto(); setCurrentView('landing'); }}
-              className="text-sm text-white/40 transition-colors hover:text-primary-300"
-            >
-              Home
-            </motion.button>
+            <>
+              <motion.button
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                onClick={() => { resetPhoto(); setCurrentView('landing'); }}
+                className="text-sm text-white/40 transition-colors hover:text-primary-300"
+              >
+                Home
+              </motion.button>
+              <QualityTierSelect />
+            </>
           )}
 
           {authState.isAuthenticated && (
