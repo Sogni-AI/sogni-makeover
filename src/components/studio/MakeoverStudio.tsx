@@ -400,8 +400,10 @@ function MakeoverStudio() {
           messages={chat.messages}
           isStreaming={chat.isStreaming}
           isChatOpen={chat.isChatOpen}
+          unreadCount={chat.unreadCount}
           currentToolProgress={chat.currentToolProgress}
           onSendMessage={chat.sendMessage}
+          onOpen={chat.openChat}
           onClose={chat.closeChat}
           onSelectCategory={handleChatSelectCategory}
           onHighlightTransformation={handleChatHighlightTransformation}

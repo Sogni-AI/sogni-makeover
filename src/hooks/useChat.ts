@@ -310,7 +310,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           },
           onComplete: (finalHistory) => {
             flushTokenQueue();
-            const cleaned = finalHistory.map((m) => ({ ...m, isStreaming: false }));
+            const cleaned = finalHistory
+              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+              .map((m) => ({ ...m, isStreaming: false }));
             setMessages(cleaned);
             if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
@@ -392,7 +394,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           },
           onComplete: (finalHistory) => {
             flushTokenQueue();
-            setMessages(finalHistory.map((m) => ({ ...m, isStreaming: false })));
+            setMessages(
+              finalHistory
+                .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+                .map((m) => ({ ...m, isStreaming: false })),
+            );
             if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
           },
           onError: () => {
@@ -408,9 +414,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         sogniClient
       );
 
-      // Don't include the synthetic "I just sat down" user message in displayed history
+      // Don't include the synthetic "I just sat down" user message or empty assistant messages
       const filteredHistory = updatedHistory
         .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
+        .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
         .map((m) => ({ ...m, isStreaming: false }));
       setMessages(filteredHistory);
     } catch {
@@ -431,7 +438,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     photoAnalysis: PhotoAnalysis | null;
     generatedCategories: GeneratedCategory[];
   }) => {
-    setMessages(data.messages);
+    setMessages(
+      data.messages.filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length)),
+    );
     if (data.photoAnalysis) {
       photoAnalysisRef.current = data.photoAnalysis;
       setPhotoAnalysis(data.photoAnalysis);
@@ -455,7 +464,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   }, []);
 
   const notifyGenerationComplete = useCallback(async (transformation: { name: string; prompt: string }, resultUrl: string) => {
-    if (isStreaming) {
+    if (isStreamingRef.current) {
       // Queue the notification to process when streaming finishes
       pendingAnalysisRef.current = { transformation, resultUrl };
       return;
@@ -551,9 +560,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           },
           onComplete: (finalHistory) => {
             flushTokenQueue();
-            // Filter out the synthetic trigger message from displayed history
+            // Filter out the synthetic trigger message and empty assistant messages
             const filtered = finalHistory
               .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
+              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
               .map((m) => ({ ...m, isStreaming: false }));
             setMessages(filtered);
             if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
@@ -580,8 +590,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } finally {
       isAutoAnalyzingRef.current = false;
       setIsStreaming(false);
+      // Drain any pending analysis queued during this run (continues auto-pilot loop)
+      setTimeout(() => drainPendingAnalysis(), 0);
     }
-  }, [isStreaming, isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult]);
+  }, [isStreaming, isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult, drainPendingAnalysis]);
 
   // Keep notifyGenerationComplete ref current for deferred drain calls
   notifyGenerationCompleteRef.current = notifyGenerationComplete;
@@ -595,7 +607,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const autoPilotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const kickOffAutoPilot = useCallback(async () => {
-    if (isStreaming || !generatedCategoriesRef.current.length) return;
+    if (isStreamingRef.current || isAutoAnalyzingRef.current || !generatedCategoriesRef.current.length) return;
     setIsStreaming(true);
 
     autoPilotIterationsRef.current = 1;
@@ -660,6 +672,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             flushTokenQueue();
             const filtered = finalHistory
               .filter((m) => !(m.role === 'user' && m.content.startsWith('[Auto-Pilot activated')))
+              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
               .map((m) => ({ ...m, isStreaming: false }));
             setMessages(filtered);
             if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
@@ -682,8 +695,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } finally {
       isAutoAnalyzingRef.current = false;
       setIsStreaming(false);
+      // Drain any pending analysis queued during this run (continues auto-pilot loop)
+      setTimeout(() => drainPendingAnalysis(), 0);
     }
-  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult]);
+  }, [buildToolContext, sogniClient, enqueueToken, flushTokenQueue, handleTransformationResult, drainPendingAnalysis]);
 
   const toggleAutoPilot = useCallback(() => {
     setIsAutoPilot((prev) => {
