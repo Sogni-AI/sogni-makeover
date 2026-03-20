@@ -28,6 +28,7 @@ export interface Transformation {
   thumbnail?: string;
   intensity?: number; // Default denoise strength 0.5-0.95
   negativePrompt?: string;
+  pitch?: string;
   gender?: 'male' | 'female'; // absent = neutral, shows for both
 }
 

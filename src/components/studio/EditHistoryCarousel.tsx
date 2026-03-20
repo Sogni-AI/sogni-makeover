@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import BeforeAfterSlider from '@/components/common/BeforeAfterSlider';
@@ -75,6 +75,31 @@ function EditHistoryCarousel() {
   const [showFullscreen, setShowFullscreen] = useState(false);
 
   const { steps, currentIndex, canUndo, canRedo, goToStep, undo, redo, mode } = editStack;
+
+  // ── Pitch bubble (shows when a new step is pushed) ──────────────────────
+  const [showPitchBubble, setShowPitchBubble] = useState(false);
+  const prevStepCountRef = useRef(steps.length);
+
+  // Detect when a new step is added (stepCount increases)
+  useEffect(() => {
+    if (steps.length > prevStepCountRef.current) {
+      setShowPitchBubble(true);
+    }
+    prevStepCountRef.current = steps.length;
+  }, [steps.length]);
+
+  // Dismiss bubble on click anywhere
+  useEffect(() => {
+    if (!showPitchBubble) return;
+    const dismiss = () => setShowPitchBubble(false);
+    window.addEventListener('click', dismiss);
+    return () => window.removeEventListener('click', dismiss);
+  }, [showPitchBubble]);
+
+  const currentPitch = useMemo(() => {
+    if (currentIndex < 0) return null;
+    return steps[currentIndex]?.transformation?.pitch ?? null;
+  }, [currentIndex, steps]);
 
   // ── Measure container ─────────────────────────────────────────────────────
 
@@ -345,7 +370,22 @@ function EditHistoryCarousel() {
         <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-primary-400/10 bg-surface-900/80 px-2 pb-1.5 pt-1 shadow-xl backdrop-blur-md sm:flex-row sm:gap-1.5 sm:rounded-full sm:pb-1.5 sm:pt-1.5">
           {steps[currentIndex]?.transformation && (
             <>
-              <span className="text-[11px] font-medium text-primary-300/80">
+              <span className="relative text-[11px] font-medium text-primary-300/80">
+                {/* Pitch bubble */}
+                <AnimatePresence>
+                  {showPitchBubble && currentPitch && (
+                    <motion.div
+                      className="pitch-bubble"
+                      initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.95, transition: { duration: 0.15, ease: 'easeIn' } }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {currentPitch}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 {steps[currentIndex].transformation.icon} {steps[currentIndex].transformation.name}
                 {editStack.stepCount > 1 && (
                   <span className="ml-1 text-white/25">

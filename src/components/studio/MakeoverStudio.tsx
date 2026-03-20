@@ -199,6 +199,7 @@ function MakeoverStudio() {
         icon: transformation.icon,
         intensity: transformation.intensity,
         negativePrompt: transformation.negativePrompt,
+        pitch: transformation.pitch,
       });
     },
     [generateMakeover, chat]

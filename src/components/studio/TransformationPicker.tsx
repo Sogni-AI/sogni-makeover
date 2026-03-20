@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import type { GeneratedTransformation, GeneratedCategory } from '@/types/chat';
 
@@ -38,6 +39,27 @@ function TransformationPicker({
 
   const transformations = category?.transformations || [];
 
+  // Portal-based tooltip state
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const showTooltip = useCallback((e: React.MouseEvent<HTMLButtonElement>, pitch: string) => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({
+      text: pitch,
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+    });
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    hideTimeoutRef.current = setTimeout(() => setTooltip(null), 100);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex min-h-0 flex-col">
@@ -76,6 +98,8 @@ function TransformationPicker({
                   whileHover={isDisabled ? undefined : { scale: 1.05 }}
                   whileTap={isDisabled ? undefined : { scale: 0.95 }}
                   onClick={() => !isDisabled && onSelectTransformation(transformation)}
+                  onMouseEnter={(e) => !isDisabled && transformation.pitch && showTooltip(e, transformation.pitch)}
+                  onMouseLeave={hideTooltip}
                   className={`transformation-card ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
                   disabled={isDisabled}
                   aria-label={`Apply ${transformation.name} transformation`}
@@ -99,6 +123,20 @@ function TransformationPicker({
           </div>
         )}
       </div>
+
+      {/* Portal tooltip (escapes overflow clipping) */}
+      {tooltip && createPortal(
+        <div
+          className="transformation-tooltip-portal"
+          style={{
+            left: tooltip.x,
+            top: tooltip.y,
+          }}
+        >
+          {tooltip.text}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
