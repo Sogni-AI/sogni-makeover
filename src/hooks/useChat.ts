@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type {
   ChatMessage,
   PhotoAnalysis,
@@ -22,6 +22,8 @@ interface UseChatOptions {
   getEditStack: () => EditStep[];
   getEditStackDepth: () => number;
   isGenerating: () => boolean;
+  isAuthenticated: boolean;
+  demoGenerationsRemaining: number;
   generateFromPrompt: (params: {
     name?: string;
     prompt: string;
@@ -66,6 +68,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     getEditStack,
     getEditStackDepth,
     isGenerating,
+    isAuthenticated,
+    demoGenerationsRemaining,
     generateFromPrompt,
     onCategoryRecommended,
   } = options;
@@ -83,6 +87,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   isChatOpenRef.current = isChatOpen;
   const autoPilotIterationsRef = useRef(0);
   const MAX_AUTO_PILOT_ITERATIONS = 6;
+
+  // Disable auto-pilot when demo generation limit is reached
+  useEffect(() => {
+    if (!isAuthenticated && demoGenerationsRemaining <= 0 && isAutoPilot) {
+      disableAutoPilot();
+    }
+  }, [demoGenerationsRemaining]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
   const photoAnalysisRef = useRef<PhotoAnalysis>(FALLBACK_ANALYSIS);
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -352,22 +365,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                   timestamp: Date.now(),
                   isStreaming: false,
                   isToolProgress: true,
+                  isToolDone: false,
                 },
               ];
             });
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `tp-${Date.now()}-done`,
-                role: 'assistant' as const,
-                content: result.success ? 'Done!' : (result.error || 'Failed'),
-                timestamp: Date.now(),
-                isStreaming: false,
-                isToolProgress: true,
-              },
-            ]);
+            setMessages((prev) => {
+              // Mark the matching start message as done instead of adding a separate "Done!" message
+              const startIdx = [...prev].reverse().findIndex((m) => m.isToolProgress && !m.isToolDone);
+              if (startIdx !== -1) {
+                const idx = prev.length - 1 - startIdx;
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], isToolDone: true };
+                return updated;
+              }
+              return prev;
+            });
 
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
@@ -408,7 +422,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           },
         },
         sogniClient,
-        autoPilotConfig
+        autoPilotConfig,
+        isMobile
       );
 
     } catch (error) {
@@ -496,7 +511,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }]);
           },
         },
-        sogniClient
+        sogniClient,
+        undefined,
+        isMobile
       );
     } catch {
       setMessages([{
@@ -546,7 +563,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     try {
       const toolContext = buildToolContext();
       const welcomeHistory = await sendChatMessage(
-        '[Session resumed — the client just came back to continue their makeover. Welcome them back warmly, remind them where you left off based on the conversation history, and encourage them to pick one of the options to continue their makeover. If the client might be on a mobile device, let them know they can close the chat to see and tap the makeover options. Keep it short and fun.]',
+        '[Session resumed — the client just came back to continue their makeover. Welcome them back warmly, remind them where you left off based on the conversation history, and encourage them to pick one of the options to continue their makeover. Keep it short and fun.]',
         restoredMessages,
         photoAnalysisRef.current,
         toolContext,
@@ -575,22 +592,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                   timestamp: Date.now(),
                   isStreaming: false,
                   isToolProgress: true,
+                  isToolDone: false,
                 },
               ];
             });
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `tp-${Date.now()}-done`,
-                role: 'assistant' as const,
-                content: result.success ? 'Done!' : (result.error || 'Failed'),
-                timestamp: Date.now(),
-                isStreaming: false,
-                isToolProgress: true,
-              },
-            ]);
+            setMessages((prev) => {
+              // Mark the matching start message as done instead of adding a separate "Done!" message
+              const startIdx = [...prev].reverse().findIndex((m) => m.isToolProgress && !m.isToolDone);
+              if (startIdx !== -1) {
+                const idx = prev.length - 1 - startIdx;
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], isToolDone: true };
+                return updated;
+              }
+              return prev;
+            });
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
@@ -623,7 +641,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             });
           },
         },
-        sogniClient
+        sogniClient,
+        undefined,
+        isMobile
       );
 
       // Filter out synthetic trigger from final state (only if no deferred typing in progress)
@@ -788,22 +808,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                   timestamp: Date.now(),
                   isStreaming: false,
                   isToolProgress: true,
+                  isToolDone: false,
                 },
               ];
             });
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `tp-${Date.now()}-done`,
-                role: 'assistant' as const,
-                content: result.success ? 'Done!' : (result.error || 'Failed'),
-                timestamp: Date.now(),
-                isStreaming: false,
-                isToolProgress: true,
-              },
-            ]);
+            setMessages((prev) => {
+              // Mark the matching start message as done instead of adding a separate "Done!" message
+              const startIdx = [...prev].reverse().findIndex((m) => m.isToolProgress && !m.isToolDone);
+              if (startIdx !== -1) {
+                const idx = prev.length - 1 - startIdx;
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], isToolDone: true };
+                return updated;
+              }
+              return prev;
+            });
 
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
@@ -848,7 +869,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           },
         },
         sogniClient,
-        autoPilotConfig
+        autoPilotConfig,
+        isMobile
       );
 
     } catch (error) {
@@ -947,22 +969,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                   timestamp: Date.now(),
                   isStreaming: false,
                   isToolProgress: true,
+                  isToolDone: false,
                 },
               ];
             });
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `tp-${Date.now()}-done`,
-                role: 'assistant' as const,
-                content: result.success ? 'Done!' : (result.error || 'Failed'),
-                timestamp: Date.now(),
-                isStreaming: false,
-                isToolProgress: true,
-              },
-            ]);
+            setMessages((prev) => {
+              // Mark the matching start message as done instead of adding a separate "Done!" message
+              const startIdx = [...prev].reverse().findIndex((m) => m.isToolProgress && !m.isToolDone);
+              if (startIdx !== -1) {
+                const idx = prev.length - 1 - startIdx;
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], isToolDone: true };
+                return updated;
+              }
+              return prev;
+            });
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
@@ -1003,7 +1026,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           },
         },
         sogniClient,
-        autoPilotConfig
+        autoPilotConfig,
+        isMobile
       );
     } catch (error) {
       console.error('[useChat] Auto-pilot kickoff error:', error);
@@ -1051,6 +1075,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   }, []);
 
   const toggleAutoPilot = useCallback(() => {
+    // Prevent enabling auto-pilot when demo limit is reached
+    if (!isAutoPilot && !isAuthenticated && demoGenerationsRemaining <= 0) {
+      return;
+    }
     setIsAutoPilot((prev) => {
       const next = !prev;
       if (next) {
@@ -1069,7 +1097,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
       return next;
     });
-  }, [kickOffAutoPilot]);
+  }, [kickOffAutoPilot, isAutoPilot, isAuthenticated, demoGenerationsRemaining]);
 
   return {
     messages,

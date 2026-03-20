@@ -27,6 +27,7 @@ export interface ChatMessage {
   toolProgress?: ToolProgress | null;
   isStreaming?: boolean;
   isToolProgress?: boolean;
+  isToolDone?: boolean;
   suggestions?: string[];
 }
 

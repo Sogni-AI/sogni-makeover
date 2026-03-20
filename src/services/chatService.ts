@@ -19,7 +19,7 @@ export interface AutoPilotConfig {
   remainingIterations: number;
 }
 
-function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotConfig): string {
+function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotConfig, isMobile?: boolean): string {
   const isAutoPilotActive = autoPilot?.enabled && autoPilot.remainingIterations > 0;
 
   const roleRules = isAutoPilotActive
@@ -31,8 +31,8 @@ function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotCo
     : `Your role and how makeovers work:
 - You DO NOT directly modify the client's image. You curate categories and options for the client to browse and choose from.
 - The client picks which transformation to apply by tapping/clicking an option from the grid — not by telling you to apply it.
-- If the client seems confused about how to apply a look or asks you to "do it" / "apply it", remind them to pick an option from the grid. On mobile, let them know they can close the chat to see and tap the makeover buttons.
-- If the client seems stuck or unsure how to proceed, gently remind them they can browse the categories and tap any option that catches their eye. On mobile, suggest closing the chat panel to see the full makeover grid.`;
+- If the client seems confused about how to apply a look or asks you to "do it" / "apply it", remind them to pick an option from the grid.${isMobile ? ' Since they\'re on mobile, let them know they can close the chat to see and tap the makeover buttons.' : ''}
+- If the client seems stuck or unsure how to proceed, gently remind them they can browse the categories and tap any option that catches their eye.${isMobile ? ' Suggest closing the chat panel to see the full makeover grid.' : ''}`;
 
   const postGenRules = isAutoPilotActive
     ? `Post-generation behavior (MANDATORY every time a makeover completes):
@@ -55,8 +55,14 @@ function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotCo
 Your job:
 1. Greet the client with your read on their look (use your stylist notes)
 2. Ask what kind of vibe they're going for today
-3. Based on their answer, call generate_transformations to create personalized options
+3. Based on their answer, you MUST call generate_transformations to create personalized options — this is mandatory, never skip it
 4. Guide them through trying looks, stacking edits, and refining results
+
+CRITICAL — generate_transformations:
+- You MUST call generate_transformations as a tool call the moment you understand what the client wants. Do NOT just talk about categories — you must actually call the tool.
+- Bracket syntax like [category:Name] only creates links to categories that ALREADY exist in the grid. It does NOT create categories. The only way to create categories is by calling generate_transformations.
+- Never reference categories or options with bracket syntax until AFTER generate_transformations has been called and returned results.
+- If the client gives you a vibe or direction, your response MUST include a generate_transformations tool call. A text-only response at this stage is wrong.
 
 Rules:
 - When uncertain about gender or preferences, ask — don't assume
@@ -71,6 +77,8 @@ Rules:
 ${roleRules}
 
 ${postGenRules}
+
+Client device: ${isMobile ? 'mobile (they need to close the chat panel to see and tap the makeover grid)' : 'desktop (they can see the makeover grid alongside the chat)'}
 
 Client analysis:
 ${JSON.stringify(photoAnalysis, null, 2)}`;
@@ -92,11 +100,12 @@ export async function sendChatMessage(
   callbacks: ChatStreamCallbacks,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sogniClient?: any,
-  autoPilot?: AutoPilotConfig
+  autoPilot?: AutoPilotConfig,
+  isMobile?: boolean
 ): Promise<ChatMessage[]> {
   const systemMessage = {
     role: 'system' as const,
-    content: buildSystemPrompt(photoAnalysis, autoPilot),
+    content: buildSystemPrompt(photoAnalysis, autoPilot, isMobile),
   };
 
   // Filter out UI-only tool progress messages — they're not part of the

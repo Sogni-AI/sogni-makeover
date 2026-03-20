@@ -69,6 +69,8 @@ function MakeoverStudio() {
     getEditStack: () => editStackRef.current.steps,
     getEditStackDepth: () => editStackRef.current.stepCount,
     isGenerating: () => isGeneratingRef.current,
+    isAuthenticated: authState.isAuthenticated,
+    demoGenerationsRemaining,
     generateFromPrompt,
     onCategoryRecommended: (categoryName: string) => {
       setSelectedCategory(categoryName);
