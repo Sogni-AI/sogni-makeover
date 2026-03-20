@@ -290,7 +290,7 @@ function LandingHero() {
                     onClick={() => setStep('quality')}
                     className="text-lg shadow-xl shadow-primary-400/10"
                   >
-                    Start Your Makeover
+                    {hasSavedSession ? 'Start New Makeover' : 'Start Your Makeover'}
                   </Button>
                   {hasSavedSession && (
                     <Button
