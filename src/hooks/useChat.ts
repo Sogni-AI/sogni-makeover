@@ -491,7 +491,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     try {
       const toolContext = buildToolContext();
       const welcomeHistory = await sendChatMessage(
-        '[Session resumed — the client just came back to continue their makeover. Welcome them back warmly, remind them where you left off based on the conversation history, and ask what they want to try next. Keep it short and fun.]',
+        '[Session resumed — the client just came back to continue their makeover. Welcome them back warmly, remind them where you left off based on the conversation history, and encourage them to pick one of the options from the grid to continue their makeover. If the client might be on a mobile device, let them know they can close the chat to see and tap the makeover options. Keep it short and fun.]',
         restoredMessages,
         photoAnalysisRef.current,
         toolContext,
