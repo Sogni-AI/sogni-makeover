@@ -42,4 +42,4 @@ async function handler(
   }
 }
 
-toolRegistry.register('generate_transformations', definition, handler, 30000);
+toolRegistry.register('generate_transformations', definition, handler, 60000);
