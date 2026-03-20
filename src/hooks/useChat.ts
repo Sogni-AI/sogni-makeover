@@ -269,6 +269,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     try {
       const toolContext = buildToolContext();
+      const remaining = MAX_AUTO_PILOT_ITERATIONS - autoPilotIterationsRef.current;
+      const autoPilotConfig: AutoPilotConfig = {
+        enabled: isAutoPilot && remaining > 0,
+        remainingIterations: remaining,
+      };
 
       await sendChatMessage(
         text,
@@ -368,7 +373,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             });
           },
         },
-        sogniClient
+        sogniClient,
+        autoPilotConfig
       );
 
     } catch (error) {
@@ -392,7 +398,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       // Process any queued auto-analysis that arrived while streaming
       setTimeout(() => drainPendingAnalysis(), 0);
     }
-  }, [isStreaming, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, drainPendingAnalysis, handleTransformationResult]);
+  }, [isStreaming, isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, drainPendingAnalysis, handleTransformationResult]);
 
   const initWithPhoto = useCallback(async (imageUrl: string) => {
     // Run photo analysis
