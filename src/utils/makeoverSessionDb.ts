@@ -67,13 +67,10 @@ export async function saveSession(data: PersistedSession): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const request = store.put(data, SESSION_KEY);
+      store.put(data, SESSION_KEY);
 
-      request.onsuccess = () => resolve();
-      request.onerror = (event) => reject((event.target as IDBRequest).error);
-
-      tx.oncomplete = () => db.close();
-      tx.onerror = (event) => reject((event.target as IDBTransaction).error);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = (event) => { db.close(); reject((event.target as IDBTransaction).error); };
     });
   } catch (e) {
     console.warn('makeoverSessionDb: error saving session:', e);
@@ -123,13 +120,10 @@ export async function clearSession(): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const request = store.delete(SESSION_KEY);
+      store.delete(SESSION_KEY);
 
-      request.onsuccess = () => resolve();
-      request.onerror = (event) => reject((event.target as IDBRequest).error);
-
-      tx.oncomplete = () => db.close();
-      tx.onerror = (event) => reject((event.target as IDBTransaction).error);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = (event) => { db.close(); reject((event.target as IDBTransaction).error); };
     });
   } catch (e) {
     console.warn('makeoverSessionDb: error clearing session:', e);

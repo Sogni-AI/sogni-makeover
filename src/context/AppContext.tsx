@@ -104,7 +104,7 @@ interface AppContextValue {
   // Session resume
   resumeSession: () => Promise<boolean>;
   isResumedSession: boolean;
-  saveSessionRef: React.MutableRefObject<(() => void) | null>;
+  saveSessionRef: React.MutableRefObject<((latestBase64?: string) => void) | null>;
   pendingResumeData: {
     chatMessages: ChatMessage[];
     photoAnalysis: PhotoAnalysis | null;
@@ -201,7 +201,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // -- Session resume --
   const [isResumedSession, setIsResumedSession] = useState(false);
-  const saveSessionRef = useRef<(() => void) | null>(null);
+  const saveSessionRef = useRef<((latestBase64?: string) => void) | null>(null);
   const [pendingResumeData, setPendingResumeData] = useState<{
     chatMessages: ChatMessage[];
     photoAnalysis: PhotoAnalysis | null;
@@ -363,7 +363,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
   const resumeSession = useCallback(async (): Promise<boolean> => {
     const session = await loadSessionFromDb();
-    if (!session) return false;
+    if (!session || !session.originalImageBase64) return false;
 
     restoreOriginalImage(session.originalImageBase64);
     editStack.restore(session.editStack);
@@ -759,7 +759,8 @@ export function AppProvider({ children }: AppProviderProps) {
 
           fetchImageAsBase64(resultImageUrl).then(base64 => {
             editStack.updateLatestBase64(base64);
-            saveSessionRef.current?.();
+            // Pass fetched base64 directly — editStackRef is stale at this point
+            saveSessionRef.current?.(base64);
           }).catch(() => {
             // Non-critical — will be fetched on-demand if needed
           });
@@ -978,7 +979,8 @@ export function AppProvider({ children }: AppProviderProps) {
 
                 fetchImageAsBase64(result.imageUrl).then(base64 => {
                   editStack.updateLatestBase64(base64);
-                  saveSessionRef.current?.();
+                  // Pass fetched base64 directly — editStackRef is stale at this point
+                  saveSessionRef.current?.(base64);
                 }).catch(() => {
                   // Non-critical
                 });
