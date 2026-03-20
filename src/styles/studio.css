@@ -46,7 +46,20 @@
   }
 
   .transformation-grid {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
     padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); /* Room for minimized chat bar */
+  }
+
+  .transformation-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .transformation-card {
+    flex-shrink: 0;
+    width: 100px;
   }
 }
 

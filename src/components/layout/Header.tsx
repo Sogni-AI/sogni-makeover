@@ -26,15 +26,15 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         <button
           onClick={() => setCurrentView('landing')}
-          className="group flex items-center gap-2.5 transition-opacity hover:opacity-80"
+          className="group flex items-center gap-1.5 transition-opacity hover:opacity-80"
         >
           {/* Geometric diamond logo mark */}
-          <div className="relative flex h-8 w-8 items-center justify-center">
-            <div className="absolute h-5 w-5 rotate-45 border border-primary-400/40 transition-colors group-hover:border-primary-400/70" />
-            <div className="absolute h-2.5 w-2.5 rotate-45 bg-primary-400/60 transition-colors group-hover:bg-primary-400" />
+          <div className="relative flex h-5 w-5 items-center justify-center">
+            <div className="absolute h-3.5 w-3.5 rotate-45 border border-primary-400/40 transition-colors group-hover:border-primary-400/70" />
+            <div className="absolute h-1.5 w-1.5 rotate-45 bg-primary-400/60 transition-colors group-hover:bg-primary-400" />
           </div>
-          <span className="text-lg tracking-wide">
-            <span className="font-display text-xl font-semibold text-primary-300">
+          <span className="text-sm tracking-wide">
+            <span className="font-display text-sm font-semibold text-primary-300">
               Sogni
             </span>{' '}
             <span className="font-light text-white/60">Makeover</span>

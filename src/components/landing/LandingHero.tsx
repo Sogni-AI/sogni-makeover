@@ -229,17 +229,17 @@ function LandingHero() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-4 sm:px-6 lg:px-8"
+        className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-4 sm:px-6 lg:px-8"
       >
         <div className="text-center">
           {/* Pill badge with mascot */}
           <motion.div variants={itemVariants} className="flex flex-col items-center">
             {/* Mascot peeking from behind pill */}
-            <div className="h-[110px] overflow-hidden pointer-events-none sm:h-[140px] lg:h-[180px]">
+            <div className="h-[99px] overflow-hidden pointer-events-none sm:h-[126px] lg:h-[162px]">
               <img
                 src="/images/mascot.png"
                 alt="Sogni Makeover mascot"
-                className="h-auto w-[140px] sm:w-[180px] lg:w-[220px]"
+                className="h-auto w-[126px] sm:w-[162px] lg:w-[198px]"
               />
             </div>
 
@@ -252,7 +252,7 @@ function LandingHero() {
           {/* Hero heading - editorial serif */}
           <motion.h1
             variants={itemVariants}
-            className="mt-4 font-display text-5xl font-medium tracking-tight sm:text-6xl lg:mt-8 lg:text-8xl"
+            className="mt-4 font-display text-5xl font-medium tracking-tight sm:text-6xl lg:mt-5 lg:text-8xl"
           >
             <span className="block text-white/90">Transform Your</span>
             <span className="mt-1 block font-display italic">
@@ -261,7 +261,7 @@ function LandingHero() {
           </motion.h1>
 
           {/* Decorative line */}
-          <motion.div variants={itemVariants} className="mx-auto mt-3 flex items-center justify-center gap-3 lg:mt-6">
+          <motion.div variants={itemVariants} className="mx-auto mt-3 flex items-center justify-center gap-3 lg:mt-4">
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-primary-400/30" />
             <div className="h-1.5 w-1.5 rotate-45 border border-primary-400/40" />
             <div className="h-px w-12 bg-gradient-to-l from-transparent to-primary-400/30" />
@@ -269,13 +269,13 @@ function LandingHero() {
 
           <motion.p
             variants={itemVariants}
-            className="mx-auto mt-3 max-w-lg text-base font-light leading-relaxed text-white/40 sm:text-lg lg:mt-6"
+            className="mx-auto mt-3 max-w-lg text-base font-light leading-relaxed text-white/40 sm:text-lg lg:mt-4"
           >
             Try new hairstyles, makeup, and styles instantly.
             See how you look before making any real changes.
           </motion.p>
 
-          <motion.div variants={itemVariants} className="mt-6 flex flex-col items-center gap-4 lg:mt-10">
+          <motion.div variants={itemVariants} className="mt-6 flex flex-col items-center gap-4 lg:mt-6">
             <AnimatePresence mode="wait">
               {step === 'idle' ? (
                 <motion.div

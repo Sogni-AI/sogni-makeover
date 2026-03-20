@@ -260,7 +260,7 @@ function CameraView() {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-primary-400/10 bg-surface-950 max-h-[55dvh] sm:max-h-none">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-primary-400/10 bg-surface-950 max-h-[55dvh] sm:max-h-[60dvh]">
         {cameraState === 'captured' && capturedImage ? (
           <motion.img
             initial={{ opacity: 0 }}
