@@ -32,8 +32,15 @@ router.post('/completions', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  // Guard against writing to a closed response (e.g. after timeout)
+  let responseClosed = false;
+  const safeWrite = (data) => {
+    if (!responseClosed) res.write(data);
+  };
+
   // Safety timeout (2 minutes)
   const timeout = setTimeout(() => {
+    responseClosed = true;
     res.write(`event: error\ndata: ${JSON.stringify({ message: 'Request timeout', code: 'timeout' })}\n\n`);
     res.end();
   }, 120000);
@@ -44,20 +51,18 @@ router.post('/completions', async (req, res) => {
     let toolCalls = [];
     let completeSent = false;
 
+    // SDK ChatStream yields { content, tool_calls, finishReason } directly
     for await (const chunk of stream) {
-      const choice = chunk.choices?.[0];
-      if (!choice) continue;
-
-      const delta = choice.delta;
+      if (responseClosed) break;
 
       // Stream text content
-      if (delta?.content) {
-        res.write(`event: token\ndata: ${JSON.stringify({ content: delta.content })}\n\n`);
+      if (chunk.content) {
+        safeWrite(`event: token\ndata: ${JSON.stringify({ content: chunk.content })}\n\n`);
       }
 
-      // Accumulate tool calls
-      if (delta?.tool_calls) {
-        for (const tc of delta.tool_calls) {
+      // Accumulate tool calls from streamed chunks
+      if (chunk.tool_calls) {
+        for (const tc of chunk.tool_calls) {
           const idx = tc.index ?? 0;
           if (!toolCalls[idx]) {
             toolCalls[idx] = { id: tc.id || '', name: '', arguments: '' };
@@ -69,33 +74,48 @@ router.post('/completions', async (req, res) => {
       }
 
       // Send finish reason
-      if (choice.finish_reason) {
+      if (chunk.finishReason) {
         if (toolCalls.length > 0) {
           for (const tc of toolCalls) {
-            res.write(`event: tool_call\ndata: ${JSON.stringify(tc)}\n\n`);
+            safeWrite(`event: tool_call\ndata: ${JSON.stringify(tc)}\n\n`);
           }
         }
-        res.write(`event: complete\ndata: ${JSON.stringify({
-          finishReason: choice.finish_reason,
+        safeWrite(`event: complete\ndata: ${JSON.stringify({
+          finishReason: chunk.finishReason,
           usage: chunk.usage || null,
         })}\n\n`);
         completeSent = true;
       }
     }
 
+    // Check stream.toolCalls as fallback — only when no tool calls arrived during streaming
+    if (!responseClosed && toolCalls.length === 0 && stream.toolCalls?.length > 0) {
+      for (const tc of stream.toolCalls) {
+        toolCalls.push({
+          id: tc.id || '',
+          name: tc.function?.name || '',
+          arguments: tc.function?.arguments || '{}',
+        });
+      }
+      for (const tc of toolCalls) {
+        safeWrite(`event: tool_call\ndata: ${JSON.stringify(tc)}\n\n`);
+      }
+    }
+
     // Send synthetic complete if stream ended without finish_reason
     if (!completeSent) {
-      res.write(`event: complete\ndata: ${JSON.stringify({ finishReason: 'stop', usage: null })}\n\n`);
+      safeWrite(`event: complete\ndata: ${JSON.stringify({ finishReason: 'stop', usage: null })}\n\n`);
     }
   } catch (error) {
     console.error('[Chat] Error:', error);
-    res.write(`event: error\ndata: ${JSON.stringify({
+    safeWrite(`event: error\ndata: ${JSON.stringify({
       message: error.message || 'Chat completion failed',
       code: 'chat_error',
     })}\n\n`);
   } finally {
     clearTimeout(timeout);
-    res.end();
+    if (!responseClosed) res.end();
+    responseClosed = true;
   }
 });
 

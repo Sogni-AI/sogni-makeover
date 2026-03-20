@@ -11,6 +11,7 @@ import type {
 import type { EditStep } from '@/types';
 import { sendChatMessage, type AutoPilotConfig } from '@/services/chatService';
 import { analyzePhotoSubject, FALLBACK_ANALYSIS } from '@/services/photoAnalysisService';
+import { getURLs } from '@/config/urls';
 
 interface UseChatOptions {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,11 +175,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     getEditStackDepth,
     isGenerating,
     analyzeImage: async (imageUrl: string, systemPrompt: string): Promise<string> => {
-      // Use SDK for vision analysis
+      // Resize image first
+      const dataUri = await resizeForVision(imageUrl);
+
       if (sogniClient?.getChatClient) {
+        // Authenticated: direct SDK call
         const rawClient = sogniClient.getChatClient();
-        // Resize image first
-        const dataUri = await resizeForVision(imageUrl);
         let content = '';
         const stream = await rawClient.chat.completions.create({
           model: 'qwen3.5-35b-a3b-gguf-q4km',
@@ -204,7 +206,19 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
         return content;
       }
-      return 'Analysis not available in demo mode.';
+
+      // Demo: backend proxy
+      const urls = getURLs();
+      const base64 = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
+      const response = await fetch(`${urls.apiUrl}/api/photo-analysis/vision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, systemPrompt }),
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`Vision analysis failed: ${response.status}`);
+      const result = await response.json();
+      return result.content || '';
     },
     getSogniClient: () => sogniClient,
     getPhotoAnalysis: () => photoAnalysisRef.current,
@@ -402,7 +416,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     try {
       const toolContext = buildToolContext();
-      const updatedHistory = await sendChatMessage(
+      await sendChatMessage(
         'I just sat down. What do you think?',
         [],
         analysis,
@@ -421,6 +435,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             flushTokenQueue();
             setMessages(
               finalHistory
+                .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
                 .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
                 .map((m) => ({ ...m, isStreaming: false })),
             );
@@ -438,13 +453,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         },
         sogniClient
       );
-
-      // Don't include the synthetic "I just sat down" user message or empty assistant messages
-      const filteredHistory = updatedHistory
-        .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
-        .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-        .map((m) => ({ ...m, isStreaming: false }));
-      setMessages(filteredHistory);
     } catch {
       setMessages([{
         id: assistantPlaceholderId,

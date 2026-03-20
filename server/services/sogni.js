@@ -911,9 +911,9 @@ export async function analyzePhotoSubject(imageBase64DataUri) {
       think: false,
     });
 
+    // SDK ChatStream yields { content, ... } directly
     for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta?.content;
-      if (delta) fullContent += delta;
+      if (chunk.content) fullContent += chunk.content;
     }
 
     // Parse JSON, handling markdown code fences
@@ -944,6 +944,43 @@ export async function analyzePhotoSubject(imageBase64DataUri) {
       };
     }
   }, 'photo subject analysis');
+}
+
+// ---------------------------------------------------------------------------
+// Vision analysis proxy for demo users
+// ---------------------------------------------------------------------------
+
+export async function analyzeImageVision(imageUrl, systemPrompt) {
+  return withSogniClient(async (client) => {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: imageUrl } },
+          { type: 'text', text: 'Analyze this image.' },
+        ],
+      },
+    ];
+
+    let fullContent = '';
+    const stream = await client.chat.completions.create({
+      model: SUBJECT_ANALYSIS_MODEL,
+      messages,
+      stream: true,
+      tokenType: 'spark',
+      temperature: 0.3,
+      max_tokens: 300,
+      think: false,
+    });
+
+    // SDK ChatStream yields { content, ... } directly
+    for await (const chunk of stream) {
+      if (chunk.content) fullContent += chunk.content;
+    }
+
+    return fullContent;
+  }, 'vision analysis');
 }
 
 // ---------------------------------------------------------------------------

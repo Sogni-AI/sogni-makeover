@@ -215,29 +215,32 @@ export async function sendChatMessage(
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
+        let currentEventType = '';
         for (const line of lines) {
           if (line.startsWith('event: ')) {
-            // Next line should be data
+            currentEventType = line.slice(7).trim();
             continue;
           }
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.content) {
+              if (currentEventType === 'token' && data.content) {
                 assistantContent += data.content;
                 callbacks.onToken(data.content);
-              }
-              if (data.id && data.name) {
-                // tool_call event
+              } else if (currentEventType === 'tool_call' && data.id && data.name) {
                 toolCalls.push({
                   id: data.id,
                   name: data.name,
                   arguments: data.arguments || '{}',
                 });
+              } else if (currentEventType === 'error') {
+                throw new Error(data.message || 'Chat completion failed');
               }
-            } catch {
+            } catch (e) {
+              if (e instanceof Error && currentEventType === 'error') throw e;
               // ignore parse errors
             }
+            currentEventType = '';
           }
         }
       }

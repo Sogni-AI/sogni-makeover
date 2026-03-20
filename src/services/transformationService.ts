@@ -169,18 +169,20 @@ export async function generateTransformations(
         throw new Error(`Transformation generation failed: ${response.status}`);
       }
 
-      // Read SSE stream
+      // Read SSE stream with proper line buffering
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
       const decoder = new TextDecoder();
       let fullContent = '';
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {

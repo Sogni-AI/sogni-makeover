@@ -1,5 +1,5 @@
 import express from 'express';
-import { analyzePhotoSubject } from '../services/sogni.js';
+import { analyzePhotoSubject, analyzeImageVision } from '../services/sogni.js';
 
 const router = express.Router();
 
@@ -39,6 +39,32 @@ router.post('/analyze', async (req, res) => {
       features: {},
       stylistNotes: '',
     });
+  }
+});
+
+// Vision analysis proxy for demo users (used by compare_before_after, analyze_result tools)
+router.post('/vision', async (req, res) => {
+  try {
+    const { imageBase64, systemPrompt } = req.body;
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return res.status(400).json({ error: 'imageBase64 must be a non-empty string' });
+    }
+    if (!systemPrompt || typeof systemPrompt !== 'string') {
+      return res.status(400).json({ error: 'systemPrompt must be a non-empty string' });
+    }
+    if (systemPrompt.length > 20000) {
+      return res.status(400).json({ error: 'systemPrompt must not exceed 20000 characters' });
+    }
+
+    const dataUri = imageBase64.startsWith('data:')
+      ? imageBase64
+      : `data:image/jpeg;base64,${imageBase64}`;
+
+    const result = await analyzeImageVision(dataUri, systemPrompt);
+    res.json({ content: result });
+  } catch (error) {
+    console.error('[Vision] Error:', error);
+    res.status(500).json({ error: error.message || 'Vision analysis failed' });
   }
 });
 
