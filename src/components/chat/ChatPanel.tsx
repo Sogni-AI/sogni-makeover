@@ -178,7 +178,7 @@ function ChatPanel({
                   onClose();
                 }
               }}
-              className="chat-panel relative flex flex-col overflow-x-clip md:h-full md:border-l border-primary-400/[0.06] bg-surface-950/95 backdrop-blur-sm"
+              className="chat-panel md:relative flex flex-col overflow-x-clip md:h-full md:border-l border-primary-400/[0.06] bg-surface-950/95 backdrop-blur-sm"
             >
               {/* Drag handle — swipe down to dismiss (mobile only) */}
               <div
