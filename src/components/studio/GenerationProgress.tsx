@@ -85,7 +85,6 @@ function GenerationProgress({ progress, onCancel, onDismiss, transformationName 
               <div className="mt-1.5">
                 <ProgressBar
                   progress={progress.progress}
-                  status={statusLabel}
                   message={progress.message}
                   showPercentage
                 />

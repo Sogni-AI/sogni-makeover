@@ -306,50 +306,6 @@ function MakeoverStudio() {
                       </button>
                     </>
                   )}
-                  {editStack.hasSteps && (
-                    <>
-                      <span className="text-[10px] text-white/10">|</span>
-                      <div className="flex items-center rounded-full border border-primary-400/[0.06] bg-surface-900/40">
-                        <button
-                          onClick={() => editStack.setMode('original')}
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                            editStack.mode === 'original'
-                              ? 'bg-primary-400/15 text-primary-300'
-                              : 'text-white/35 hover:text-white/60'
-                          }`}
-                        >
-                          Original
-                        </button>
-                        <button
-                          onClick={() => editStack.setMode('stacked')}
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                            editStack.mode === 'stacked'
-                              ? 'bg-primary-400/15 text-primary-300'
-                              : 'text-white/35 hover:text-white/60'
-                          }`}
-                        >
-                          Stacked
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {(() => {
-                    const displayTransformation = editStack.currentStep?.transformation ?? currentTransformation;
-                    if (!displayTransformation) return null;
-                    return (
-                      <>
-                        <span className="text-[10px] text-white/10">|</span>
-                        <span className="text-[11px] text-primary-300/70">
-                          {displayTransformation.icon} {displayTransformation.name}
-                          {editStack.stepCount > 1 && (
-                            <span className="ml-1 text-white/25">
-                              ({Math.max(0, editStack.currentIndex + 1)} of {editStack.stepCount})
-                            </span>
-                          )}
-                        </span>
-                      </>
-                    );
-                  })()}
                 </div>
 
                 {/* Right: cost estimate + chat toggle */}
