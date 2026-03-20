@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import Button from '@/components/common/Button';
+import { hasSession } from '@/utils/makeoverSessionDb';
 import {
   QWEN_LIGHTNING_MODEL_ID,
   QWEN_STANDARD_MODEL_ID,
@@ -61,13 +62,18 @@ const QUALITY_TIERS = [
 ] as const;
 
 function LandingHero() {
-  const { setCurrentView, settings, updateSetting } = useApp();
+  const { setCurrentView, settings, updateSetting, resumeSession } = useApp();
   const { isAuthenticated, authMode } = useSogniAuth();
   const { tokenType } = useWallet();
   const tierCosts = useQualityTierCosts();
   const isLoggedIn = isAuthenticated && authMode !== 'demo';
   const costLabel = tokenType === 'sogni' ? 'Sogni' : 'Spark';
   const [step, setStep] = useState<'idle' | 'quality'>('idle');
+  const [hasSavedSession, setHasSavedSession] = useState(false);
+
+  useEffect(() => {
+    hasSession().then(setHasSavedSession);
+  }, []);
 
   // Portrait slideshow state
   const [portraitDisplay, setPortraitDisplay] = useState({
@@ -286,6 +292,16 @@ function LandingHero() {
                   >
                     Start Your Makeover
                   </Button>
+                  {hasSavedSession && (
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      onClick={() => resumeSession()}
+                      className="text-lg"
+                    >
+                      Resume Makeover
+                    </Button>
+                  )}
                   {!isLoggedIn && (
                     <p className="text-sm font-light tracking-wide text-white/20">
                       No sign-up required &bull; Free to try
