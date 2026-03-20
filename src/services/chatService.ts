@@ -103,7 +103,13 @@ export async function sendChatMessage(
     },
   ];
 
-  const tools = toolRegistry.getDefinitions();
+  let tools = toolRegistry.getDefinitions();
+
+  // When auto-pilot is off, don't give the LLM the generate_makeover tool during
+  // post-generation analysis — prevents the LLM from ignoring the "NEVER" instruction
+  if (autoPilot && !autoPilot.enabled) {
+    tools = tools.filter((t) => t.function.name !== 'generate_makeover');
+  }
 
   let roundCount = 0;
   let currentMessages = llmMessages;
