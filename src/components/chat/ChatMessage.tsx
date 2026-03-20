@@ -22,7 +22,8 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode {
 
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      // Strip orphaned ** markers (from bold spanning across link tokens)
+      parts.push(text.slice(lastIndex, match.index).replace(/\*\*/g, ''));
     }
 
     if (match[1] !== undefined) {
@@ -35,7 +36,7 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode {
   }
 
   if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+    parts.push(text.slice(lastIndex).replace(/\*\*/g, ''));
   }
 
   return parts.length > 1 ? <Fragment>{parts}</Fragment> : parts[0] ?? text;
@@ -116,7 +117,7 @@ function ChatMessage({ message, toolProgress, onSelectCategory, onSelectTransfor
       className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+        className={`max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
           isUser
             ? 'bg-primary-400/20 text-primary-100'
             : 'bg-surface-800/80 text-white/80'
