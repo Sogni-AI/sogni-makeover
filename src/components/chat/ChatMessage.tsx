@@ -50,7 +50,8 @@ function parseMessageContent(
   onSelectCategory?: (name: string) => void,
   onSelectTransformation?: (name: string) => void
 ): ReactNode {
-  const linkPattern = /\[(category|option):([^\]]+)\]/g;
+  // Match bracket tokens even when wrapped in bold/italic markers (e.g. **[category:Name]**)
+  const linkPattern = /\*{0,2}\[(category|option):([^\]]+)\]\*{0,2}/g;
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let match;
@@ -66,7 +67,7 @@ function parseMessageContent(
     }
 
     const type = match[1]; // 'category' or 'option'
-    const name = match[2]; // the display name
+    const name = match[2].replace(/\*+/g, '').trim(); // strip any bold/italic markers
 
     parts.push(
       <button
