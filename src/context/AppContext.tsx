@@ -113,7 +113,7 @@ interface AppContextValue {
   clearPendingResumeData: () => void;
 
   // Auto-enhance
-  enhancePhoto: (imageBase64: string, client: unknown, isAuthenticated: boolean) => Promise<{ imageUrl: string } | null>;
+  enhancePhoto: (imageBase64: string, client: unknown, isAuthenticated: boolean, settings?: import('@/types').AppSettings) => Promise<{ imageUrl: string } | null>;
   enhanceProgress: import('@/types').GenerationProgress | null;
   isEnhancing: boolean;
   cancelEnhancement: () => void;

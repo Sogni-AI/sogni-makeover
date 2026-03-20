@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import type { GenerationProgress, GenerationParams } from '@/types';
-import { DEFAULT_SETTINGS, GENERATION_DEFAULTS, AUTO_ENHANCE_CONFIG } from '@/constants/settings';
+import type { GenerationProgress, GenerationParams, AppSettings } from '@/types';
+import { DEFAULT_SETTINGS, GENERATION_DEFAULTS, AUTO_ENHANCE_CONFIG, getModelOption } from '@/constants/settings';
 import { getURLs } from '@/config/urls';
 import { getPaymentMethod } from '@/services/walletService';
 
@@ -13,6 +13,7 @@ export interface UseAutoEnhanceReturn {
     imageBase64: string,
     client: unknown,
     isAuthenticated: boolean,
+    settings?: AppSettings,
   ) => Promise<AutoEnhanceResult | null>;
   enhanceProgress: GenerationProgress | null;
   isEnhancing: boolean;
@@ -45,21 +46,26 @@ export function useAutoEnhance(): UseAutoEnhanceReturn {
       imageBase64: string,
       client: unknown,
       isAuthenticated: boolean,
+      settings?: AppSettings,
     ): Promise<AutoEnhanceResult | null> => {
       const abortController = new AbortController();
       abortRef.current = abortController;
 
+      // Use the user's selected model and its defaults when available
+      const modelId = settings?.defaultModel ?? DEFAULT_SETTINGS.defaultModel;
+      const modelDefaults = getModelOption(modelId).defaults;
+
       const params: GenerationParams = {
-        modelId: DEFAULT_SETTINGS.defaultModel,
+        modelId,
         positivePrompt: AUTO_ENHANCE_CONFIG.prompt,
         negativePrompt: AUTO_ENHANCE_CONFIG.negativePrompt,
         contextImages: [imageBase64],
         width: DEFAULT_SETTINGS.defaultWidth,
         height: DEFAULT_SETTINGS.defaultHeight,
-        guidance: DEFAULT_SETTINGS.defaultGuidance,
-        steps: DEFAULT_SETTINGS.defaultSteps,
-        sampler: DEFAULT_SETTINGS.defaultSampler,
-        scheduler: DEFAULT_SETTINGS.defaultScheduler,
+        guidance: modelDefaults.guidance,
+        steps: modelDefaults.steps,
+        sampler: modelDefaults.sampler,
+        scheduler: modelDefaults.scheduler,
         outputFormat: DEFAULT_SETTINGS.outputFormat,
         numberOfMedia: GENERATION_DEFAULTS.numberOfMedia,
         denoisingStrength: AUTO_ENHANCE_CONFIG.denoisingStrength,

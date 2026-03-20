@@ -209,7 +209,7 @@ function CameraView() {
       // Extract raw base64 from the data URL
       const base64 = capturedImage.includes(',') ? capturedImage.split(',')[1] : capturedImage;
 
-      enhancePhoto(base64, sogniClient, authState.isAuthenticated).then(async (result) => {
+      enhancePhoto(base64, sogniClient, authState.isAuthenticated, settings).then(async (result) => {
         if (!result) return;
         // Guard: don't replace if user already started a makeover
         if (isGenerating) return;
