@@ -108,9 +108,11 @@ function ChatMessage({ message, onSelectCategory, onSelectTransformation }: Chat
 
   const isUser = message.role === 'user';
 
-  // Tool progress messages get compact styling with spinner/check
+  // Skip empty non-streaming messages — prevents empty speech bubbles
+  if (!message.content?.trim() && !message.isStreaming && !message.imageResults?.length) return null;
+
+  // Tool progress messages get compact styling with static checkmark
   if (message.isToolProgress) {
-    const isDone = message.content === 'Done!' || message.content === 'Failed';
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -119,16 +121,9 @@ function ChatMessage({ message, onSelectCategory, onSelectTransformation }: Chat
         className="flex justify-start"
       >
         <div className="flex items-center gap-2 rounded-xl bg-surface-800/50 px-3 py-1.5 text-xs text-white/40">
-          {!isDone ? (
-            <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          ) : (
-            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none">
-              <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none">
+            <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           {message.content}
         </div>
       </motion.div>

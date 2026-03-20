@@ -372,12 +372,17 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
+            // Analysis tool ran inline — the pending notification is now redundant
+            if (toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') {
+              pendingAnalysisRef.current = null;
+            }
           },
           onComplete: (finalHistory) => {
             deferUntilDrained(() => {
               // Collect tool progress messages from current state
               const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
               const cleaned = finalHistory
+                .filter((m) => !m.isToolProgress)
                 .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
                 .map((m) => ({ ...m, isStreaming: false }));
               // Merge tool progress messages back in chronologically
@@ -541,7 +546,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     try {
       const toolContext = buildToolContext();
       const welcomeHistory = await sendChatMessage(
-        '[Session resumed — the client just came back to continue their makeover. Welcome them back warmly, remind them where you left off based on the conversation history, and encourage them to pick one of the options from the grid to continue their makeover. If the client might be on a mobile device, let them know they can close the chat to see and tap the makeover options. Keep it short and fun.]',
+        '[Session resumed — the client just came back to continue their makeover. Welcome them back warmly, remind them where you left off based on the conversation history, and encourage them to pick one of the options to continue their makeover. If the client might be on a mobile device, let them know they can close the chat to see and tap the makeover options. Keep it short and fun.]',
         restoredMessages,
         photoAnalysisRef.current,
         toolContext,
@@ -593,8 +598,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           onComplete: (finalHistory) => {
             deferUntilDrained(() => {
               const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
-              // Filter out the synthetic resume trigger and empty assistant messages
+              // Filter out the synthetic resume trigger, tool progress, and empty assistant messages
               const filtered = finalHistory
+                .filter((m) => !m.isToolProgress)
                 .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
                 .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
                 .map((m) => ({ ...m, isStreaming: false }));
@@ -623,6 +629,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       // Filter out synthetic trigger from final state (only if no deferred typing in progress)
       if (!pendingCompletionRef.current) {
         const finalMessages = welcomeHistory
+          .filter((m) => !m.isToolProgress)
           .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
           .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
           .map((m) => ({ ...m, isStreaming: false }));
@@ -695,7 +702,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       remainingIterations: remaining,
     };
 
-    const syntheticMessage = `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze. Give me your take on how it turned out and refresh my options.]`;
+    const syntheticMessage = `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze. Give me your take on how it turned out, then pick what to layer on next.]`;
 
     // Create streaming assistant placeholder (no user message shown)
     const assistantPlaceholderId = `msg-${Date.now()}-analysis`;
@@ -805,12 +812,17 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               setIsAutoPilot(false);
               autoPilotIterationsRef.current = 0;
             }
+            // Analysis tool ran inline — the pending notification is now redundant
+            if (toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') {
+              pendingAnalysisRef.current = null;
+            }
           },
           onComplete: (finalHistory) => {
             deferUntilDrained(() => {
               const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
-              // Filter out the synthetic trigger message and empty assistant messages
+              // Filter out the synthetic trigger message, tool progress, and empty assistant messages
               const filtered = finalHistory
+                .filter((m) => !m.isToolProgress)
                 .filter((m) => !(m.role === 'user' && m.content.startsWith('[Generation complete:')))
                 .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
                 .map((m) => ({ ...m, isStreaming: false }));
@@ -871,7 +883,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     const remaining = MAX_AUTO_PILOT_ITERATIONS - 1;
     const autoPilotConfig: AutoPilotConfig = { enabled: true, remainingIterations: remaining };
 
-    const syntheticMessage = '[Auto-Pilot activated. Pick the transformation you are most excited about from the current grid and apply it with generate_makeover. Go!]';
+    const hasExistingResult = getEditStackDepth() > 0;
+    const syntheticMessage = hasExistingResult
+      ? '[Auto-Pilot activated. Pick the transformation you are most excited about and layer it on with stack_transformation. Go!]'
+      : '[Auto-Pilot activated. Pick the transformation you are most excited about and apply it with generate_makeover. Go!]';
 
     const assistantPlaceholderId = `msg-${Date.now()}-autopilot`;
     setMessages((prev) => [
@@ -955,11 +970,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               setIsAutoPilot(false);
               autoPilotIterationsRef.current = 0;
             }
+            // Analysis tool ran inline — the pending notification is now redundant
+            if (toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') {
+              pendingAnalysisRef.current = null;
+            }
           },
           onComplete: (finalHistory) => {
             deferUntilDrained(() => {
               const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
               const filtered = finalHistory
+                .filter((m) => !m.isToolProgress)
                 .filter((m) => !(m.role === 'user' && m.content.startsWith('[Auto-Pilot activated')))
                 .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
                 .map((m) => ({ ...m, isStreaming: false }));

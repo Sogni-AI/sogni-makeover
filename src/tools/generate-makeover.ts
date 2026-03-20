@@ -51,15 +51,16 @@ async function handler(
     // Patch getEditStack so subsequent tool calls in the same LLM round
     // (e.g. compare_before_after) can access this step before React renders.
     const prevGetEditStack = context.getEditStack;
+    const syntheticStep = {
+      transformation: { id: `tool-${Date.now()}`, name: name || prompt.slice(0, 30), category: 'ai-generated' as const, subcategory: 'chat', prompt, icon: '' },
+      resultImageUrl: result.resultUrl,
+      resultImageBase64: '',
+      timestamp: Date.now(),
+    };
     context.getEditStack = () => {
       const stack = prevGetEditStack();
       if (stack.some((s) => s.resultImageUrl === result.resultUrl)) return stack;
-      return [...stack, {
-        transformation: { id: `tool-${Date.now()}`, name: name || prompt.slice(0, 30), category: 'ai-generated' as const, subcategory: 'chat', prompt, icon: '' },
-        resultImageUrl: result.resultUrl,
-        resultImageBase64: '',
-        timestamp: Date.now(),
-      }];
+      return [...stack, syntheticStep];
     };
 
     return { success: true, data: { resultUrl: result.resultUrl, projectId: result.projectId } };
