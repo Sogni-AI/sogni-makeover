@@ -51,7 +51,7 @@ export interface UseChatReturn {
     messages: ChatMessage[];
     photoAnalysis: PhotoAnalysis | null;
     generatedCategories: GeneratedCategory[];
-  }) => void;
+  }) => Promise<void>;
 }
 
 export function useChat(options: UseChatOptions): UseChatReturn {
@@ -458,21 +458,143 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }
   }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, handleTransformationResult]);
 
-  const restoreSession = useCallback((data: {
+  const restoreSession = useCallback(async (data: {
     messages: ChatMessage[];
     photoAnalysis: PhotoAnalysis | null;
     generatedCategories: GeneratedCategory[];
   }) => {
-    setMessages(
-      data.messages.filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length)),
+    const restoredMessages = data.messages.filter(
+      (m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length),
     );
+    setMessages(restoredMessages);
     if (data.photoAnalysis) {
       photoAnalysisRef.current = data.photoAnalysis;
       setPhotoAnalysis(data.photoAnalysis);
     }
     setGeneratedCategories(data.generatedCategories);
     setIsChatOpen(true);
-  }, []);
+
+    // Generate a welcome-back message from the AI stylist
+    setIsStreaming(true);
+    const welcomePlaceholderId = `msg-${Date.now()}-welcome-back`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: welcomePlaceholderId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    try {
+      const toolContext = buildToolContext();
+      const welcomeHistory = await sendChatMessage(
+        '[Session resumed — the client just came back to continue their makeover. Welcome them back warmly, remind them where you left off based on the conversation history, and ask what they want to try next. Keep it short and fun.]',
+        restoredMessages,
+        photoAnalysisRef.current,
+        toolContext,
+        {
+          onToken: (token) => {
+            enqueueToken(token);
+          },
+          onToolCallStart: (toolCall) => {
+            flushTokenQueue();
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              let base;
+              if (last?.isStreaming && !last.content.trim()) {
+                base = prev.slice(0, -1);
+              } else if (last?.isStreaming) {
+                base = [...prev.slice(0, -1), { ...last, isStreaming: false }];
+              } else {
+                base = prev;
+              }
+              return [
+                ...base,
+                {
+                  id: `tp-${Date.now()}-start`,
+                  role: 'assistant' as const,
+                  content: getToolMessage(toolCall.name),
+                  timestamp: Date.now(),
+                  isStreaming: false,
+                  isToolProgress: true,
+                },
+              ];
+            });
+          },
+          onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `tp-${Date.now()}-done`,
+                role: 'assistant' as const,
+                content: result.success ? 'Done!' : (result.error || 'Failed'),
+                timestamp: Date.now(),
+                isStreaming: false,
+                isToolProgress: true,
+              },
+            ]);
+            if (toolCall.name === 'generate_transformations') {
+              handleTransformationResult(result);
+            }
+          },
+          onComplete: (finalHistory) => {
+            flushTokenQueue();
+            const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
+            // Filter out the synthetic resume trigger and empty assistant messages
+            const filtered = finalHistory
+              .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
+              .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+              .map((m) => ({ ...m, isStreaming: false }));
+            const merged = [...filtered, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+            setMessages(merged);
+            if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+          },
+          onError: () => {
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.isStreaming) {
+                return [
+                  ...prev.slice(0, -1),
+                  { ...last, content: 'Welcome back! Ready to pick up where we left off?', isStreaming: false },
+                ];
+              }
+              return prev;
+            });
+          },
+        },
+        sogniClient
+      );
+
+      // Filter out synthetic trigger from final state
+      const finalMessages = welcomeHistory
+        .filter((m) => !(m.role === 'user' && m.content.startsWith('[Session resumed')))
+        .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+        .map((m) => ({ ...m, isStreaming: false }));
+      const toolProgressMsgs = messagesRef.current.filter((m) => m.isToolProgress);
+      const merged = [...finalMessages, ...toolProgressMsgs].sort((a, b) => a.timestamp - b.timestamp);
+      setMessages(merged);
+    } catch {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.isStreaming) {
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              content: 'Welcome back! Ready to pick up where we left off?',
+              isStreaming: false,
+            },
+          ];
+        }
+        return prev;
+      });
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, handleTransformationResult]);
 
   const notifyTransformationSelected = useCallback((transformation: GeneratedTransformation) => {
     // Add an informational message to chat history (no LLM invocation).
