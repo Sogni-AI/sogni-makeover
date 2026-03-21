@@ -73,9 +73,6 @@ function MakeoverStudio() {
     isAuthenticated: authState.isAuthenticated,
     demoGenerationsRemaining,
     generateFromPrompt,
-    onCategoryRecommended: (categoryName: string) => {
-      setSelectedCategory(categoryName);
-    },
   });
 
   // Use generated categories from chat

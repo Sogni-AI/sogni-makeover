@@ -32,7 +32,6 @@ interface UseChatOptions {
     negativePrompt?: string;
     useStackedInput?: boolean;
   }) => Promise<{ resultUrl: string; projectId: string }>;
-  onCategoryRecommended?: (categoryName: string) => void;
 }
 
 export interface UseChatReturn {
@@ -73,7 +72,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     isAuthenticated,
     demoGenerationsRemaining,
     generateFromPrompt,
-    onCategoryRecommended,
   } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -220,14 +218,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         setGeneratedCategories(shells);
       }
 
-      const recommended = result.data.recommendedCategory as string;
-      if (recommended) {
-        // Always auto-select and auto-populate the recommended category so the
-        // user immediately sees options (not just empty shells).
-        onCategoryRecommended?.(recommended);
-        // Queue auto-populate for after current streaming completes (avoids concurrent sendChatMessage)
-        pendingPopulateCategoryRef.current = recommended;
-      }
+      // Don't auto-select a recommended category — let the user choose
+      // which category to explore (or give more details via chat first).
       return;
     }
 
@@ -259,11 +251,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       setGeneratedCategories(newCategories);
     }
 
-    const recommended = result.data.recommendedCategory as string;
-    if (recommended) {
-      onCategoryRecommended?.(recommended);
-    }
-  }, [onCategoryRecommended]);
+    // Don't auto-select a recommended category — let the user choose.
+  }, []);
 
   const buildToolContext = useCallback((): MakeoverToolContext => ({
     generateFromPrompt,
@@ -1024,7 +1013,7 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
     streamingLockRef.current = true;
     setIsStreaming(true);
 
-    const syntheticMessage = `[Client is browsing the "${categoryName}" category — populate it with options. Call generate_transformations with phase "options" and categoryName "${categoryName}".]`;
+    const syntheticMessage = `[Client selected the "${categoryName}" category. First respond with a brief, friendly one-sentence acknowledgment about their choice, then call generate_transformations with phase "options" and categoryName "${categoryName}".]`;
 
     const assistantPlaceholderId = `msg-${Date.now()}-populate`;
     setMessages((prev) => [

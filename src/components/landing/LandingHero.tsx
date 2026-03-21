@@ -331,7 +331,7 @@ function LandingHero() {
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => handleSelectQuality(tier.modelId)}
-                        className={`relative flex w-64 items-center justify-center rounded-full border px-6 py-3 text-sm font-light tracking-wide backdrop-blur-sm transition-all duration-300 cursor-pointer sm:w-72 ${
+                        className={`relative flex w-64 items-center justify-center rounded-full border px-6 py-3 text-sm font-light tracking-wide backdrop-blur-sm transition-[color,background-color,border-color,box-shadow] duration-300 cursor-pointer sm:w-72 ${
                           isCurrentDefault
                             ? 'border-primary-400/40 bg-primary-400/[0.08] text-white/80 shadow-lg shadow-primary-400/10'
                             : 'border-primary-400/15 bg-surface-900/60 text-white/50 hover:border-primary-400/30 hover:bg-primary-400/[0.05] hover:text-white/70'
