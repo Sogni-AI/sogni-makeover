@@ -126,6 +126,36 @@ function EditHistoryCarousel() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, steps.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Mouse wheel navigation ───────────────────────────────────────────────
+
+  const wheelCooldown = useRef(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Only respond to meaningful scroll deltas
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (Math.abs(delta) < 10) return;
+
+      e.preventDefault();
+
+      if (wheelCooldown.current) return;
+      wheelCooldown.current = true;
+      setTimeout(() => { wheelCooldown.current = false; }, 300);
+
+      if (delta > 0) {
+        goToStep(Math.min(steps.length - 1, currentIndex + 1));
+      } else {
+        goToStep(Math.max(-1, currentIndex - 1));
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [currentIndex, steps.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Touch swipe ───────────────────────────────────────────────────────────
 
   const touchStartX = useRef(0);
