@@ -73,7 +73,6 @@ function EditHistoryCarousel() {
   const [containerSize, setContainerSize] = useState({ width: 800, height: 450 });
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showFullscreenCarousel, setShowFullscreenCarousel] = useState(false);
-  const [showActionBar, setShowActionBar] = useState(true);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
 
   const { steps, currentIndex, canUndo, canRedo, goToStep, undo, redo, mode } = editStack;
@@ -83,10 +82,8 @@ function EditHistoryCarousel() {
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px) and (orientation: portrait)');
     setIsMobilePortrait(mq.matches);
-    setShowActionBar(!mq.matches);
     const handler = (e: MediaQueryListEvent) => {
       setIsMobilePortrait(e.matches);
-      setShowActionBar(!e.matches);
     };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
@@ -260,7 +257,6 @@ function EditHistoryCarousel() {
       className="coverflow-viewport"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onClick={() => { if (isMobilePortrait && showActionBar) setShowActionBar(false); }}
     >
       {/* ── Coverflow cards ──────────────────────────────────── */}
       <AnimatePresence initial={false}>
@@ -299,7 +295,7 @@ function EditHistoryCarousel() {
                 if (isActive) {
                   if (isMobilePortrait) {
                     e.stopPropagation();
-                    setShowActionBar(prev => !prev);
+                    setShowFullscreenCarousel(true);
                   }
                 } else {
                   goToStep(item.stepIndex);
@@ -393,7 +389,7 @@ function EditHistoryCarousel() {
       )}
 
       {/* ── Action bar (viewing a result) ────────────────────── */}
-      {currentIndex >= 0 && (!isMobilePortrait || showActionBar) && (
+      {currentIndex >= 0 && !isMobilePortrait && (
         <div
           className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-primary-400/10 bg-surface-900/80 px-2 pb-1.5 pt-1 shadow-xl backdrop-blur-md"
           onClick={(e) => e.stopPropagation()}
@@ -496,6 +492,14 @@ function EditHistoryCarousel() {
           icon: item.transformation?.icon,
         }))}
         initialIndex={activeArrayIndex}
+        onDownload={handleDownload}
+        onShare={handleShare}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onFullscreenCompare={() => setShowFullscreen(true)}
+        stepCount={editStack.stepCount}
       />
     </div>
   );
