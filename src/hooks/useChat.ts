@@ -50,6 +50,7 @@ export interface UseChatReturn {
   toggleAutoPilot: () => void;
   disableAutoPilot: () => void;
   notifyTransformationSelected: (transformation: GeneratedTransformation) => void;
+  notifyGenerationError: (transformationName: string, errorMessage: string) => void;
   notifyGenerationComplete: (transformation: { name: string; prompt: string }, resultUrl: string) => Promise<void>;
   populateCategory: (categoryName: string) => Promise<void>;
   initWithPhoto: (imageUrl: string) => Promise<void>;
@@ -771,6 +772,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     ]);
   }, []);
 
+  const notifyGenerationError = useCallback((transformationName: string, errorMessage: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `msg-${Date.now()}-error`,
+        role: 'assistant' as const,
+        content: `The "${transformationName}" transformation ran into an issue: ${errorMessage}. Feel free to try it again or pick a different look!`,
+        timestamp: Date.now(),
+      },
+    ]);
+    if (isAutoPilot) {
+      setIsAutoPilot(false);
+      autoPilotIterationsRef.current = 0;
+    }
+    if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
+  }, [isAutoPilot]);
+
   const notifyGenerationComplete = useCallback(async (transformation: { name: string; prompt: string }, resultUrl: string) => {
     if (isStreamingRef.current) {
       // Queue the notification to process when streaming finishes
@@ -1013,7 +1031,16 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
     streamingLockRef.current = true;
     setIsStreaming(true);
 
-    const syntheticMessage = `[Client selected the "${categoryName}" category. First respond with a brief, friendly one-sentence acknowledgment about their choice, then call generate_transformations with phase "options" and categoryName "${categoryName}".]`;
+    // Build context about already-applied makeover layers so new options complement them
+    const appliedSteps = getEditStack();
+    let appliedContext = '';
+    if (appliedSteps.length > 0) {
+      const appliedDescriptions = appliedSteps.map(s => `"${s.transformation.name}"`).join(', ');
+      const currentLookSummary = appliedSteps.map(s => s.transformation.name).join(', ');
+      appliedContext = `\n\nIMPORTANT — The client already has these makeover layers applied: ${appliedDescriptions}. Mention that you're finding ${categoryName.toLowerCase()} options that'll pair well with their current look (reference one or two of the applied layers by name). Pass currentLook "${currentLookSummary}" in the generate_transformations call so options complement what's already been done.`;
+    }
+
+    const syntheticMessage = `[Client selected the "${categoryName}" category. First respond with a brief, friendly one-sentence acknowledgment about their choice, then call generate_transformations with phase "options" and categoryName "${categoryName}".${appliedContext}]`;
 
     const assistantPlaceholderId = `msg-${Date.now()}-populate`;
     setMessages((prev) => [
@@ -1095,7 +1122,13 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
               const catAfter = generatedCategoriesRef.current.find((c) => c.name === categoryName);
               if (catAfter && !catAfter.populated) {
                 const catDesc = catAfter.description || categoryName;
-                generateCategoryOptions(photoAnalysisRef.current, categoryName, catDesc, sogniClient)
+                const fallbackSteps = getEditStack();
+                const fallbackLook = fallbackSteps.length > 0
+                  ? fallbackSteps.map(s => s.transformation.name).join(', ')
+                  : undefined;
+                generateCategoryOptions(photoAnalysisRef.current, categoryName, catDesc, sogniClient, {
+                  currentLook: fallbackLook,
+                })
                   .then((transformations) => {
                     handleTransformationResult({
                       success: true,
@@ -1380,6 +1413,7 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
     toggleAutoPilot,
     disableAutoPilot,
     notifyTransformationSelected,
+    notifyGenerationError,
     notifyGenerationComplete,
     populateCategory,
     initWithPhoto,
