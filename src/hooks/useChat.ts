@@ -86,6 +86,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [unreadCount, setUnreadCount] = useState(0);
   const isChatOpenRef = useRef(false);
   isChatOpenRef.current = isChatOpen;
+  const isAutoPilotRef = useRef(false);
+  isAutoPilotRef.current = isAutoPilot;
   const autoPilotIterationsRef = useRef(0);
   const MAX_AUTO_PILOT_ITERATIONS = 6;
 
@@ -218,7 +220,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
 
       const recommended = result.data.recommendedCategory as string;
-      if (recommended) {
+      if (recommended && isAutoPilotRef.current) {
         onCategoryRecommended?.(recommended);
         // Queue auto-populate for after current streaming completes (avoids concurrent sendChatMessage)
         pendingPopulateCategoryRef.current = recommended;
@@ -255,7 +257,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }
 
     const recommended = result.data.recommendedCategory as string;
-    if (recommended) {
+    if (recommended && isAutoPilotRef.current) {
       onCategoryRecommended?.(recommended);
     }
   }, [onCategoryRecommended]);
@@ -544,6 +546,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     try {
       const toolContext = buildToolContext();
+      let toolCallSeen = false;
       await sendChatMessage(
         'I just sat down. What do you think?',
         [],
@@ -551,9 +554,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         toolContext,
         {
           onToken: (token) => {
-            enqueueToken(token);
+            // Suppress post-tool tokens — only the greeting should stream
+            if (!toolCallSeen) enqueueToken(token);
           },
-          onToolCallStart: () => {},
+          onToolCallStart: () => { flushTokenQueue(); toolCallSeen = true; },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
@@ -561,11 +565,22 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           },
           onComplete: (finalHistory) => {
             deferUntilDrained(() => {
+              // Keep only the first assistant message (greeting) — strip the post-tool
+              // commentary about categories so the chat stays clean until the user picks a chip.
+              let foundGreeting = false;
               setMessages(
                 finalHistory
                   .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
+                  .filter((m) => m.role !== 'tool')
+                  .filter((m) => {
+                    if (m.role === 'assistant') {
+                      if (!foundGreeting) { foundGreeting = true; return true; }
+                      return false; // drop post-tool assistant messages
+                    }
+                    return true;
+                  })
                   .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-                  .map((m) => ({ ...m, isStreaming: false })),
+                  .map((m) => ({ ...m, isStreaming: false, toolCalls: undefined })),
               );
               if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
               setIsStreaming(false);

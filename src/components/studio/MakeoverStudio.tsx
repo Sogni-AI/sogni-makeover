@@ -159,9 +159,9 @@ function MakeoverStudio() {
     }
   }, [isResumedSession, pendingResumeData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync selected category when categories arrive
+  // Sync selected category when categories arrive (only auto-select in auto-pilot mode)
   useEffect(() => {
-    if (generatedCategories.length > 0 && !selectedCategory) {
+    if (generatedCategories.length > 0 && !selectedCategory && chat.isAutoPilot) {
       setSelectedCategory(generatedCategories[0].name);
     }
   }, [generatedCategories.length]); // eslint-disable-line react-hooks/exhaustive-deps
