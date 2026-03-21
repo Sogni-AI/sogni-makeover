@@ -1,7 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-import BeforeAfterSlider from '@/components/common/BeforeAfterSlider';
 import FullscreenComparison from '@/components/studio/FullscreenComparison';
 
 // ── Coverflow positioning math ──────────────────────────────────────────────
@@ -71,7 +70,6 @@ function EditHistoryCarousel() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 450 });
-  const [showComparison, setShowComparison] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
 
   const { steps, currentIndex, canUndo, canRedo, goToStep, undo, redo, mode } = editStack;
@@ -102,12 +100,6 @@ function EditHistoryCarousel() {
   // Centering offsets (cards have left:50% top:50% via CSS)
   const baseX = -cardWidth / 2;
   const baseY = -cardHeight / 2;
-
-  // ── Reset comparison on navigate ──────────────────────────────────────────
-
-  useEffect(() => {
-    setShowComparison(false);
-  }, [currentIndex]);
 
   // ── Arrow key navigation ──────────────────────────────────────────────────
 
@@ -295,26 +287,12 @@ function EditHistoryCarousel() {
                 transition: { type: 'spring', stiffness: 600, damping: 35 },
               } : undefined}
             >
-              {/* Card content: inline comparison slider or image */}
-              {isActive && showComparison && currentIndex >= 0 ? (
-                <BeforeAfterSlider
-                  beforeImage={beforeImage!}
-                  afterImage={steps[currentIndex].resultImageUrl}
-                  originalImage={
-                    currentIndex > 0 && mode === 'stacked' && originalImageUrl
-                      ? originalImageUrl
-                      : undefined
-                  }
-                  className="max-h-full"
-                />
-              ) : (
-                <img
-                  src={item.url ?? undefined}
-                  alt={item.stepIndex === -1 ? 'Original photo' : (item.transformation?.name ?? 'Result')}
-                  className="coverflow-card-img"
-                  draggable={false}
-                />
-              )}
+              <img
+                src={item.url ?? undefined}
+                alt={item.stepIndex === -1 ? 'Original photo' : (item.transformation?.name ?? 'Result')}
+                className="coverflow-card-img"
+                draggable={false}
+              />
 
               {/* Label on non-active cards */}
               {!isActive && (
@@ -410,16 +388,6 @@ function EditHistoryCarousel() {
               <span className="hidden sm:inline">Redo</span>
             </button>
           )}
-          <div className="h-4 w-px bg-primary-400/10" />
-          <button
-            onClick={() => setShowComparison(!showComparison)}
-            className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium text-white/70 transition-colors hover:bg-primary-400/[0.06] hover:text-white"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-            </svg>
-            {showComparison ? 'Result' : 'Compare'}
-          </button>
           <div className="h-4 w-px bg-primary-400/10" />
           <button
             onClick={handleDownload}
