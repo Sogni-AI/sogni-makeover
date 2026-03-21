@@ -90,6 +90,37 @@ function FullscreenCarousel({ isOpen, onClose, items, initialIndex, onDownload, 
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
+  // Mouse wheel navigation
+  const wheelCooldown = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (Math.abs(delta) < 10) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (wheelCooldown.current) return;
+      wheelCooldown.current = true;
+      setTimeout(() => { wheelCooldown.current = false; }, 300);
+
+      if (delta > 0) {
+        setDirection(1);
+        setActiveIndex(i => Math.min(items.length - 1, i + 1));
+      } else {
+        setDirection(-1);
+        setActiveIndex(i => Math.max(0, i - 1));
+      }
+    };
+
+    // Capture phase so we intercept before the background carousel
+    window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+    return () => window.removeEventListener('wheel', handleWheel, { capture: true });
+  }, [isOpen, items.length]);
+
   // Touch swipe
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -183,30 +214,34 @@ function FullscreenCarousel({ isOpen, onClose, items, initialIndex, onDownload, 
               )}
             </div>
 
-            {item && item.stepIndex >= 0 && (
+            {item && (
               <div className="fullscreen-carousel-actions">
-                <button
-                  onClick={onUndo}
-                  disabled={!canUndo}
-                  className="fullscreen-carousel-action-btn"
-                  title="Undo"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                  </svg>
-                </button>
-                {canRedo && (
-                  <button
-                    onClick={onRedo}
-                    className="fullscreen-carousel-action-btn"
-                    title="Redo"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
-                    </svg>
-                  </button>
+                {item.stepIndex >= 0 && (
+                  <>
+                    <button
+                      onClick={onUndo}
+                      disabled={!canUndo}
+                      className="fullscreen-carousel-action-btn"
+                      title="Undo"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                      </svg>
+                    </button>
+                    {canRedo && (
+                      <button
+                        onClick={onRedo}
+                        className="fullscreen-carousel-action-btn"
+                        title="Redo"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
+                        </svg>
+                      </button>
+                    )}
+                    <div className="fullscreen-carousel-action-divider" />
+                  </>
                 )}
-                <div className="fullscreen-carousel-action-divider" />
                 <button
                   onClick={onDownload}
                   className="fullscreen-carousel-action-btn"
@@ -227,16 +262,20 @@ function FullscreenCarousel({ isOpen, onClose, items, initialIndex, onDownload, 
                   </svg>
                   <span>Share</span>
                 </button>
-                <div className="fullscreen-carousel-action-divider" />
-                <button
-                  onClick={() => { onClose(); onFullscreenCompare?.(); }}
-                  className="fullscreen-carousel-action-btn"
-                  title="Compare before/after"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                  </svg>
-                </button>
+                {item.stepIndex >= 0 && (
+                  <>
+                    <div className="fullscreen-carousel-action-divider" />
+                    <button
+                      onClick={() => { onClose(); onFullscreenCompare?.(); }}
+                      className="fullscreen-carousel-action-btn"
+                      title="Compare before/after"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                      </svg>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

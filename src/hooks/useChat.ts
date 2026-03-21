@@ -884,9 +884,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     // Build context about available categories and applied history for auto-pilot diversity
     const ngCategories = generatedCategoriesRef.current;
-    const ngCategoryList = ngCategories.map(c =>
-      `- ${c.name}${c.populated ? ` (${c.transformations.length} options)` : ' (unpopulated — populate first to browse)'}`
-    ).join('\n');
+    const ngCategoryList = ngCategories.map(c => {
+      if (c.populated && c.transformations.length > 0) {
+        const optionNames = c.transformations.map(t => t.name).join(', ');
+        return `- ${c.name} (options: ${optionNames})`;
+      }
+      return `- ${c.name} (unpopulated — populate first to browse)`;
+    }).join('\n');
     const ngEditStack = getEditStack();
     const ngAppliedList = ngEditStack.map(s => `- "${s.transformation.name}"`).join('\n');
 
@@ -905,7 +909,7 @@ ${ngAppliedList}
 Available categories:
 ${ngCategoryList}
 
-Give me your take on how it turned out, then pick what to layer on next. Choose from a DIFFERENT category than recent picks. If you want something from an unpopulated category, populate it first with generate_transformations phase "options".]`;
+Give me your take on how it turned out, then suggest what to try next from the Available categories above. IMPORTANT: When using [category:Name] or [option:Name] bracket syntax, you may ONLY reference names that appear EXACTLY in the Available categories list above. NEVER invent or hallucinate category or option names.]`;
 
     // Create streaming assistant placeholder (no user message shown)
     const assistantPlaceholderId = `msg-${Date.now()}-analysis`;

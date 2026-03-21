@@ -60,7 +60,7 @@ function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotCo
 4. Do NOT call stack_transformation, generate_makeover, or generate_transformations. The session is complete.`
     : `Post-generation behavior (MANDATORY every time a makeover completes):
 1. Call compare_before_after to visually analyze the result
-2. React in 1-2 sentences — what worked, what surprised you. Reference options with [category:Name] / [option:Name] bracket syntax.
+2. React in 1-2 sentences — what worked, what surprised you. Suggest what to try next using [category:Name] or [option:Name] bracket syntax — but ONLY for categories/options that ALREADY EXIST in the Available categories list provided in the generation-complete message. NEVER invent, hallucinate, or make up category or option names. If a category is unpopulated, you can reference the category name but NOT specific option names within it (they don't exist yet).
 3. Do NOT call generate_transformations here — the existing categories and options stay as-is. Only refresh when the client explicitly asks for new options or "more options" (use mode "expand" or "refresh" as appropriate).
 4. NEVER call generate_makeover here. The client picks their next look — you suggest, they choose.`;
 
