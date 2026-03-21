@@ -237,22 +237,20 @@ function MakeoverStudio() {
   }, [resetPhoto, chat]);
 
   const handleChatSelectCategory = useCallback((categoryName: string) => {
-    setSelectedCategory(categoryName);
-  }, []);
+    handleCategoryChange(categoryName);
+  }, [handleCategoryChange]);
 
   const handleChatHighlightTransformation = useCallback((transformationName: string) => {
-    // Find which category contains this transformation by name and select it
-    const category = generatedCategories.find(c =>
-      c.transformations.some(t => t.name === transformationName)
-    );
-    if (category) {
-      setSelectedCategory(category.name);
+    // Find which category contains this transformation and trigger generation
+    for (const category of generatedCategories) {
       const transformation = category.transformations.find(t => t.name === transformationName);
       if (transformation) {
-        setActiveTransformationId(transformation.id);
+        setSelectedCategory(category.name);
+        handleSelectTransformation(transformation);
+        return;
       }
     }
-  }, [generatedCategories]);
+  }, [generatedCategories, handleSelectTransformation]);
 
   // Redirect to capture if no image is loaded
   useEffect(() => {
