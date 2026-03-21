@@ -31,6 +31,8 @@ export interface PersistedSession {
   generatedCategories: GeneratedCategory[];
   selectedGender: Gender | null;
   timestamp: number;
+  /** Cached thumbnail URLs keyed by transformation ID or "__cat__" + category name */
+  thumbnailCache?: Record<string, string>;
 }
 
 // --- Internal helper ---

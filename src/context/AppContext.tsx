@@ -109,6 +109,7 @@ interface AppContextValue {
     chatMessages: ChatMessage[];
     photoAnalysis: PhotoAnalysis | null;
     generatedCategories: GeneratedCategory[];
+    thumbnailCache?: Record<string, string>;
   } | null;
   clearPendingResumeData: () => void;
 
@@ -206,6 +207,7 @@ export function AppProvider({ children }: AppProviderProps) {
     chatMessages: ChatMessage[];
     photoAnalysis: PhotoAnalysis | null;
     generatedCategories: GeneratedCategory[];
+    thumbnailCache?: Record<string, string>;
   } | null>(null);
   const clearPendingResumeData = useCallback(() => setPendingResumeData(null), []);
 
@@ -376,6 +378,7 @@ export function AppProvider({ children }: AppProviderProps) {
       chatMessages: session.chatMessages,
       photoAnalysis: session.photoAnalysis,
       generatedCategories: session.generatedCategories,
+      thumbnailCache: session.thumbnailCache,
     });
 
     setIsResumedSession(true);

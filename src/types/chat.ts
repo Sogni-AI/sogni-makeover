@@ -76,12 +76,18 @@ export interface GeneratedTransformation {
   intensity: number;
   negativePrompt: string;
   icon: string;
+  thumbnailPrompt?: string;
+  thumbnailUrl?: string;
 }
 
 export interface GeneratedCategory {
   name: string;
   icon: string;
+  description?: string;
+  thumbnailPrompt?: string;
   transformations: GeneratedTransformation[];
+  populated?: boolean;
+  isPopulating?: boolean;
 }
 
 export interface MakeoverToolContext {

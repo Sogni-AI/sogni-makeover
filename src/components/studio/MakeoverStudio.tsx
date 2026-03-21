@@ -11,6 +11,7 @@ import ChatPanel from '@/components/chat/ChatPanel';
 import DemoBanner from '@/components/auth/DemoBanner';
 import { useMakeoverCostEstimate } from '@/hooks/useMakeoverCostEstimate';
 import { useWallet } from '@/hooks/useWallet';
+import { useThumbnails } from '@/hooks/useThumbnails';
 import { formatTokenAmount, getTokenLabel } from '@/services/walletService';
 import { saveSession } from '@/utils/makeoverSessionDb';
 import '@/styles/studio.css';
@@ -88,6 +89,22 @@ function MakeoverStudio() {
   const chatGeneratedCategoriesRef = useRef(chat.generatedCategories);
   chatGeneratedCategoriesRef.current = chat.generatedCategories;
 
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [activeTransformationId, setActiveTransformationId] = useState<string | null>(null);
+  const [showAutoPilotTip, setShowAutoPilotTip] = useState(false);
+
+  // Generate thumbnails for transformation cards and categories
+  const { thumbnailUrls, cacheSnapshot } = useThumbnails({
+    categories: generatedCategories,
+    selectedCategory,
+    sogniClient,
+    photoAnalysis: chat.photoAnalysis,
+    initialCache: pendingResumeData?.thumbnailCache,
+  });
+
+  const cacheSnapshotRef = useRef(cacheSnapshot);
+  cacheSnapshotRef.current = cacheSnapshot;
+
   useEffect(() => {
     saveSessionRef.current = (latestBase64?: string) => {
       if (!originalImageBase64) return;
@@ -110,15 +127,12 @@ function MakeoverStudio() {
         photoAnalysis: chatPhotoAnalysisRef.current,
         generatedCategories: chatGeneratedCategoriesRef.current,
         selectedGender: selectedGenderRef.current,
+        thumbnailCache: cacheSnapshotRef.current(),
         timestamp: Date.now(),
       });
     };
     return () => { saveSessionRef.current = null; };
   }, [originalImageBase64]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [activeTransformationId, setActiveTransformationId] = useState<string | null>(null);
-  const [showAutoPilotTip, setShowAutoPilotTip] = useState(false);
 
   // Trigger photo analysis + AI greeting when studio mounts with a photo
   const initTriggered = useRef(false);
@@ -132,8 +146,10 @@ function MakeoverStudio() {
     }
   }, [originalImageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const restoreTriggered = useRef(false);
   useEffect(() => {
-    if (isResumedSession && pendingResumeData) {
+    if (isResumedSession && pendingResumeData && !restoreTriggered.current) {
+      restoreTriggered.current = true;
       chat.restoreSession({
         messages: pendingResumeData.chatMessages,
         photoAnalysis: pendingResumeData.photoAnalysis,
@@ -182,7 +198,11 @@ function MakeoverStudio() {
 
   const handleCategoryChange = useCallback((categoryName: string) => {
     setSelectedCategory(categoryName);
-  }, []);
+    const cat = generatedCategories.find(c => c.name === categoryName);
+    if (cat && !cat.populated && !cat.isPopulating) {
+      chat.populateCategory(categoryName);
+    }
+  }, [generatedCategories, chat]);
 
   const handleSelectTransformation = useCallback(
     (transformation: GeneratedTransformation) => {
@@ -409,6 +429,7 @@ function MakeoverStudio() {
                 isDisabled={isGenerating || isEnhancing}
                 activeTransformationId={activeTransformationId}
                 isLoading={isCategoriesLoading}
+                thumbnailUrls={thumbnailUrls}
               />
             </div>
           </div>

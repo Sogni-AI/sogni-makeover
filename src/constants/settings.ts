@@ -7,6 +7,7 @@ import type { AppSettings } from '@/types';
 export const QWEN_LIGHTNING_MODEL_ID = 'qwen_image_edit_2511_fp8_lightning';
 export const QWEN_STANDARD_MODEL_ID = 'qwen_image_edit_2511_fp8';
 export const FLUX2_DEV_MODEL_ID = 'flux2_dev_fp8';
+export const Z_IMAGE_TURBO_MODEL_ID = 'z_image_turbo_bf16';
 
 export const DEFAULT_MODEL = FLUX2_DEV_MODEL_ID;
 
@@ -89,6 +90,18 @@ export const IMAGE_CONSTRAINTS = {
   acceptedTypes: ['image/jpeg', 'image/png', 'image/webp'],
   outputWidth: 1024,
   outputHeight: 1536,
+};
+
+export const THUMBNAIL_CONFIG = {
+  modelId: Z_IMAGE_TURBO_MODEL_ID,
+  width: 512,
+  height: 512,
+  steps: 4,
+  guidance: 1,
+  sampler: 'euler',
+  scheduler: 'simple',
+  outputFormat: 'jpg',
+  maxConcurrent: 3,
 };
 
 export const SSE_CONFIG = {

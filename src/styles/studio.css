@@ -204,6 +204,86 @@
   cursor: not-allowed;
 }
 
+/* Category thumbnail */
+.category-thumbnail-container {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .category-thumbnail-container {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+.category-thumbnail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  animation: thumbnailFadeIn 0.3s ease-out;
+}
+
+.category-thumbnail-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+@media (min-width: 768px) {
+  .category-thumbnail-placeholder {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Thumbnail container */
+.thumbnail-container {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .thumbnail-container {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+.thumbnail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  animation: thumbnailFadeIn 0.3s ease-out;
+}
+
+@keyframes thumbnailFadeIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.thumbnail-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
 /* Portal-based tooltip (rendered at document.body to escape overflow clipping) */
 .transformation-tooltip-portal {
   position: fixed;
@@ -426,49 +506,6 @@
   .coverflow-label {
     border-radius: 0 0 12px 12px;
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Pitch Bubble (action bar speech bubble)                                     */
-/* -------------------------------------------------------------------------- */
-
-.pitch-bubble {
-  position: absolute;
-  bottom: calc(100% + 14px);
-  left: 0;
-  width: max-content;
-  max-width: 240px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  border: none;
-  background: rgba(45, 38, 32, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 11px;
-  font-style: italic;
-  line-height: 1.4;
-  text-align: center;
-  pointer-events: auto;
-  z-index: 30;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  white-space: normal;
-}
-
-/* Speech bubble tail */
-.pitch-bubble::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 20px;
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: rgba(45, 38, 32, 0.8);
-}
-
-/* No outer border tail needed */
-.pitch-bubble::before {
-  display: none;
 }
 
 /* -------------------------------------------------------------------------- */

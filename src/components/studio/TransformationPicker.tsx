@@ -10,6 +10,7 @@ interface TransformationPickerProps {
   isDisabled: boolean;
   activeTransformationId: string | null;
   isLoading: boolean;
+  thumbnailUrls?: Map<string, string>;
 }
 
 const gridContainerVariants = {
@@ -31,6 +32,7 @@ function TransformationPicker({
   isDisabled,
   activeTransformationId,
   isLoading,
+  thumbnailUrls,
 }: TransformationPickerProps) {
   const category = useMemo(
     () => categories.find((c) => c.name === selectedCategory),
@@ -60,13 +62,15 @@ function TransformationPicker({
     hideTimeoutRef.current = setTimeout(() => setTooltip(null), 100);
   }, []);
 
-  if (isLoading) {
+  const isCategoryLoading = category && !category.populated;
+
+  if (isLoading || isCategoryLoading) {
     return (
       <div className="flex min-h-0 flex-col">
         <div className="transformation-grid">
           {[...Array(8)].map((_, i) => (
             <div key={i} className="transformation-card flex flex-col items-center gap-2 p-3">
-              <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
+              <div className="thumbnail-placeholder animate-pulse" />
               <div className="h-3 w-16 animate-pulse rounded bg-white/5" />
               <div className="h-2 w-24 animate-pulse rounded bg-white/5" />
             </div>
@@ -90,6 +94,7 @@ function TransformationPicker({
           >
             {transformations.map((transformation) => {
               const isActive = activeTransformationId === transformation.id;
+              const thumbUrl = thumbnailUrls?.get(transformation.id);
               return (
                 <motion.button
                   key={transformation.id}
@@ -104,13 +109,21 @@ function TransformationPicker({
                   disabled={isDisabled}
                   aria-label={`Apply ${transformation.name} transformation`}
                 >
-                  <span className="text-2xl">{transformation.icon}</span>
+                  <div className="thumbnail-container">
+                    {thumbUrl ? (
+                      <img
+                        src={thumbUrl}
+                        alt={transformation.name}
+                        className="thumbnail-image"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="thumbnail-placeholder">
+                        <span className="text-lg">{transformation.icon}</span>
+                      </div>
+                    )}
+                  </div>
                   <span className="text-xs font-medium leading-tight">{transformation.name}</span>
-                  {transformation.pitch && (
-                    <span className="mt-0.5 text-[10px] leading-tight text-white/30 line-clamp-2">
-                      {transformation.pitch}
-                    </span>
-                  )}
                 </motion.button>
               );
             })}

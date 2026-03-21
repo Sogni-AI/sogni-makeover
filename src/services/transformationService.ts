@@ -1,4 +1,4 @@
-import type { GeneratedCategory, PhotoAnalysis } from '@/types/chat';
+import type { GeneratedCategory, GeneratedTransformation, PhotoAnalysis } from '@/types/chat';
 import { getURLs } from '@/config/urls';
 
 function buildGenerationPrompt(
@@ -32,6 +32,8 @@ ${genderNote}
 - Keep negative prompts consistent: "deformed, distorted, bad quality, blurry"
 - Generate unique IDs for each transformation (use descriptive slugs like "copper-auburn-hair")
 - Include emoji icons that match each transformation
+- Include a \`thumbnailPrompt\` for each transformation: a short text-to-image prompt for a quick 512x512 preview focused on the specific area of the look. IMPORTANT: always include the client's skin tone (e.g. "${photoAnalysis.features.skinTone || 'medium'} skin tone") and approximate age (e.g. "${photoAnalysis.estimatedAgeRange || 'adult'}") so the preview matches the client. For hair: close-up of the hairstyle on a person with matching skin tone and age. For makeup: close-up of the eye/lip area on matching skin. For accessories like a ring: a close-up of the item on a hand with the client's skin tone. For outfits: the garment on a person with matching complexion. Always end with "professional photography, soft studio lighting".
+- Include a \`thumbnailPrompt\` for each CATEGORY too: a SINGLE representative image (not a grid or collage) that captures the category's essence, matched to the client's skin tone and age. Example for "Hair Color": "Close-up portrait of flowing styled hair on a ${photoAnalysis.features.skinTone || 'medium'} skin tone ${photoAnalysis.estimatedAgeRange || 'adult'}, professional photography, soft studio lighting". NEVER use words like "various", "multiple", "collection", "grid", or "swatches" — always depict ONE subject or ONE item.
 - Return a \`recommendedCategory\` field with the name of the category you're most excited about for this client right now.`;
 
   let modeInstructions = '';
@@ -56,11 +58,13 @@ Return JSON:
     {
       "name": "Hair Color",
       "icon": "🎨",
+      "thumbnailPrompt": "Close-up portrait of flowing styled hair on a warm olive skin tone young adult, professional photography, soft studio lighting",
       "transformations": [
         {
           "id": "unique-id",
           "name": "Copper Auburn",
           "prompt": "Change [subject description]'s hair color to rich copper auburn with warm highlights while preserving facial features and identity",
+          "thumbnailPrompt": "Close-up of rich copper auburn hair with warm highlights on a warm olive skin tone young adult, professional beauty photography, soft studio lighting",
           "pitch": "Your warm skin tone would make this absolutely glow",
           "intensity": 0.7,
           "negativePrompt": "deformed, distorted, bad quality, blurry",
@@ -90,11 +94,13 @@ function parseGenerationResult(content: string): { categories: GeneratedCategory
   const mappedCategories = categories.map((cat: Record<string, unknown>) => ({
     name: String(cat.name || 'Looks'),
     icon: String(cat.icon || '✨'),
+    thumbnailPrompt: cat.thumbnailPrompt ? String(cat.thumbnailPrompt) : undefined,
     transformations: (Array.isArray(cat.transformations) ? cat.transformations : []).map(
       (t: Record<string, unknown>) => ({
         id: String(t.id || `gen-${Math.random().toString(36).slice(2, 8)}`),
         name: String(t.name || 'Transformation'),
         prompt: String(t.prompt || ''),
+        thumbnailPrompt: t.thumbnailPrompt ? String(t.thumbnailPrompt) : undefined,
         pitch: String(t.pitch || ''),
         intensity: typeof t.intensity === 'number' ? t.intensity : 0.65,
         negativePrompt: String(t.negativePrompt || 'deformed, distorted, bad quality, blurry'),
@@ -331,4 +337,473 @@ export async function generateTransformations(
 
     return { categories, recommendedCategory: 'Hair Color' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: Category Shells (fast, ~500 tokens output)
+// ---------------------------------------------------------------------------
+
+function buildCategoryShellPrompt(
+  photoAnalysis: PhotoAnalysis,
+  intent: string,
+  options?: {
+    mode?: 'refresh' | 'expand';
+    currentCategories?: GeneratedCategory[];
+  }
+): string {
+  const mode = options?.mode || 'refresh';
+  const currentCategories = options?.currentCategories;
+
+  const genderNote = photoAnalysis.perceivedGender === 'female'
+    ? '- Do NOT include facial hair categories — the client is female.'
+    : photoAnalysis.perceivedGender === 'male'
+      ? '- Include a Facial Hair category.'
+      : '- If the client appears male, include a Facial Hair category. If female, skip it.';
+
+  let modeInstructions = '';
+
+  if (mode === 'refresh' && currentCategories?.length) {
+    const categoryNames = currentCategories.map(c => c.name).join(', ');
+    modeInstructions = `\n\nCurrent categories in the grid: ${categoryNames}. Reorganize completely based on the client's current look. Replace categories that no longer make sense.`;
+  } else if (mode === 'expand' && currentCategories?.length) {
+    const categoryNames = currentCategories.map(c => c.name).join(', ');
+    modeInstructions = `\n\nExisting categories: ${categoryNames}. Keep all existing categories and add new ones. Do not remove or replace anything.`;
+  }
+
+  return `Based on this client's features and what they're looking for, generate category names for transformation options.
+
+Client: ${JSON.stringify(photoAnalysis, null, 2)}
+They want: ${intent}${modeInstructions}
+
+Return ONLY category shells — no transformation options. Return JSON:
+{
+  "categories": [
+    { "name": "Hair Color", "icon": "🎨", "description": "Rich colors and highlights tailored to your warm skin tone" }
+  ],
+  "recommendedCategory": "Hair Color"
+}
+
+Rules:
+- Generate up to 8 categories. Aim for 6-8 when the client's request allows it.
+- NEVER return fewer than 4 categories.
+- Good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
+${genderNote}
+- Each description should be a brief one-liner (under 15 words) that explains what the category offers, personalized to the client
+- Include an emoji icon for each category
+- Return a \`recommendedCategory\` field with the name of the category you're most excited about for this client right now
+- Do NOT include transformation options — only category name, icon, and description`;
+}
+
+function parseCategoryShellResult(content: string): { categories: GeneratedCategory[]; recommendedCategory: string } {
+  let cleaned = content.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) cleaned = fenceMatch[1].trim();
+
+  const parsed = JSON.parse(cleaned);
+  const categories = parsed.categories || parsed;
+
+  if (!Array.isArray(categories)) {
+    throw new Error('Expected categories array');
+  }
+
+  const mappedCategories: GeneratedCategory[] = categories.map((cat: Record<string, unknown>) => ({
+    name: String(cat.name || 'Looks'),
+    icon: String(cat.icon || '✨'),
+    description: cat.description ? String(cat.description) : undefined,
+    transformations: [],
+    populated: false,
+  }));
+
+  const recommendedCategory = parsed.recommendedCategory || mappedCategories[0]?.name || '';
+
+  return { categories: mappedCategories, recommendedCategory };
+}
+
+/**
+ * Phase 1: Generate category shells only (fast).
+ * Returns categories with populated=false and empty transformations.
+ */
+export async function generateCategoryShells(
+  photoAnalysis: PhotoAnalysis,
+  intent: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sogniClient?: any,
+  options?: {
+    mode?: 'refresh' | 'expand';
+    currentCategories?: GeneratedCategory[];
+  }
+): Promise<{ categories: GeneratedCategory[]; recommendedCategory: string }> {
+  const prompt = buildCategoryShellPrompt(photoAnalysis, intent, options);
+
+  try {
+    if (sogniClient?.getChatClient) {
+      // Authenticated: direct SDK
+      const rawClient = sogniClient.getChatClient();
+      const messages = [
+        { role: 'system' as const, content: 'You are an eccentric legendary Hollywood stylist. Generate category names in JSON format exactly as requested.' },
+        { role: 'user' as const, content: prompt },
+      ];
+
+      let fullContent = '';
+      const stream = await rawClient.chat.completions.create({
+        model: 'qwen3.5-35b-a3b-gguf-q4km',
+        messages,
+        stream: true,
+        tokenType: 'spark',
+        temperature: 0.8,
+        max_tokens: 2000,
+        think: false,
+      });
+
+      // SDK ChatStream yields { content, ... } directly (not OpenAI choices format)
+      for await (const chunk of stream as AsyncIterable<{ content?: string }>) {
+        if (chunk.content) fullContent += chunk.content;
+      }
+
+      return parseCategoryShellResult(fullContent);
+    } else {
+      // Demo: backend proxy
+      const urls = getURLs();
+      const response = await fetch(`${urls.apiUrl}/api/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: 'You are an eccentric legendary Hollywood stylist. Generate category names in JSON format exactly as requested.' },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 2000,
+          temperature: 0.8,
+        }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Category shell generation failed: ${response.status}`);
+      }
+
+      // Read SSE stream with proper line buffering
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) fullContent += data.content;
+            } catch {
+              // ignore parse errors on individual lines
+            }
+          }
+        }
+      }
+
+      return parseCategoryShellResult(fullContent);
+    }
+  } catch (error) {
+    console.error('[TransformationService] Error generating category shells:', error);
+    // Return fallback categories as shells (populated=false, no transformations)
+    const gender = photoAnalysis.perceivedGender;
+
+    const fallbackShells: GeneratedCategory[] = [
+      { name: 'Hair Color', icon: '🎨', description: 'Bold and subtle hair color transformations', transformations: [], populated: false },
+      { name: 'Hairstyle', icon: '💇', description: 'Fresh cuts and styles to frame your face', transformations: [], populated: false },
+      { name: 'Makeup Looks', icon: '💄', description: 'Glamorous to natural makeup transformations', transformations: [], populated: false },
+      { name: 'Vibes & Aesthetic', icon: '🌟', description: 'Complete aesthetic transformations and moods', transformations: [], populated: false },
+      { name: 'Skin & Glow', icon: '💎', description: 'Radiant skin finishes and complexion looks', transformations: [], populated: false },
+      { name: 'Outfit & Style', icon: '👗', description: 'Wardrobe changes and fashion looks', transformations: [], populated: false },
+      { name: 'Accessories', icon: '💍', description: 'Statement pieces to complete any look', transformations: [], populated: false },
+      { name: 'Eye Color', icon: '👁️', description: 'Striking eye color transformations', transformations: [], populated: false },
+    ];
+
+    if (gender !== 'female') {
+      fallbackShells.push({ name: 'Facial Hair', icon: '🧔', description: 'Beards, stubble, and grooming styles', transformations: [], populated: false });
+    }
+
+    return { categories: fallbackShells, recommendedCategory: 'Hair Color' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Category Options (on-demand, ~2-4k tokens output)
+// ---------------------------------------------------------------------------
+
+function buildCategoryOptionsPrompt(
+  photoAnalysis: PhotoAnalysis,
+  categoryName: string,
+  categoryDescription: string,
+  options?: { currentLook?: string }
+): string {
+  const currentLook = options?.currentLook;
+  const skinTone = photoAnalysis.features.skinTone || 'medium';
+  const ageRange = photoAnalysis.estimatedAgeRange || 'adult';
+
+  let lookContext = '';
+  if (currentLook) {
+    lookContext = `\n\nThe client currently looks like: ${currentLook}. Generate options that complement or build on their current look.`;
+  }
+
+  return `Generate 12 transformation options for the "${categoryName}" category.
+
+Category description: ${categoryDescription}
+Client: ${JSON.stringify(photoAnalysis, null, 2)}${lookContext}
+
+Return JSON:
+{
+  "transformations": [
+    {
+      "id": "copper-auburn-hair",
+      "name": "Copper Auburn",
+      "prompt": "Change [subject description]'s hair color to rich copper auburn with warm highlights while preserving facial features and identity",
+      "thumbnailPrompt": "Close-up of rich copper auburn hair with warm highlights on a ${skinTone} skin tone ${ageRange}, professional beauty photography, soft studio lighting",
+      "pitch": "Your warm skin tone would make this absolutely glow",
+      "intensity": 0.7,
+      "negativePrompt": "deformed, distorted, bad quality, blurry",
+      "icon": "🔥"
+    }
+  ]
+}
+
+Rules:
+- Generate exactly 12 transformation options for the "${categoryName}" category
+- Write prompts with the actual subject description baked in (not generic "the person"): use "${photoAnalysis.subjectDescription || 'the person'}" as the subject
+- Set intensity (denoising strength) appropriate to how dramatic the change is: subtle 0.5-0.6, moderate 0.6-0.75, dramatic 0.75-0.95
+- Each pitch is a one-liner the stylist would say to sell the look — cheeky, confident, fun
+- Keep negative prompts consistent: "deformed, distorted, bad quality, blurry"
+- Generate unique IDs for each transformation (use descriptive slugs like "copper-auburn-hair")
+- Include emoji icons that match each transformation
+- Include a \`thumbnailPrompt\` for each transformation: a short text-to-image prompt for a quick 512x512 preview focused on the specific area of the look. IMPORTANT: always include the client's skin tone (e.g. "${skinTone} skin tone") and approximate age (e.g. "${ageRange}") so the preview matches the client. Always end with "professional photography, soft studio lighting".
+- Make options diverse — cover a range from subtle to dramatic within the category
+- Personalize options based on the client's features`;
+}
+
+function parseCategoryOptionsResult(content: string): GeneratedTransformation[] {
+  let cleaned = content.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) cleaned = fenceMatch[1].trim();
+
+  const parsed = JSON.parse(cleaned);
+  const transformations = parsed.transformations || parsed;
+
+  if (!Array.isArray(transformations)) {
+    throw new Error('Expected transformations array');
+  }
+
+  return transformations.map((t: Record<string, unknown>) => ({
+    id: String(t.id || `gen-${Math.random().toString(36).slice(2, 8)}`),
+    name: String(t.name || 'Transformation'),
+    prompt: String(t.prompt || ''),
+    thumbnailPrompt: t.thumbnailPrompt ? String(t.thumbnailPrompt) : undefined,
+    pitch: String(t.pitch || ''),
+    intensity: typeof t.intensity === 'number' ? t.intensity : 0.65,
+    negativePrompt: String(t.negativePrompt || 'deformed, distorted, bad quality, blurry'),
+    icon: String(t.icon || '✨'),
+  }));
+}
+
+/**
+ * Phase 2: Generate options for a single category on-demand.
+ * Returns an array of transformations for the specified category.
+ */
+export async function generateCategoryOptions(
+  photoAnalysis: PhotoAnalysis,
+  categoryName: string,
+  categoryDescription: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sogniClient?: any,
+  options?: { currentLook?: string }
+): Promise<GeneratedTransformation[]> {
+  const prompt = buildCategoryOptionsPrompt(photoAnalysis, categoryName, categoryDescription, options);
+
+  try {
+    if (sogniClient?.getChatClient) {
+      // Authenticated: direct SDK
+      const rawClient = sogniClient.getChatClient();
+      const messages = [
+        { role: 'system' as const, content: 'You are an eccentric legendary Hollywood stylist. Generate transformation options in JSON format exactly as requested.' },
+        { role: 'user' as const, content: prompt },
+      ];
+
+      let fullContent = '';
+      const stream = await rawClient.chat.completions.create({
+        model: 'qwen3.5-35b-a3b-gguf-q4km',
+        messages,
+        stream: true,
+        tokenType: 'spark',
+        temperature: 0.8,
+        max_tokens: 4000,
+        think: false,
+      });
+
+      // SDK ChatStream yields { content, ... } directly (not OpenAI choices format)
+      for await (const chunk of stream as AsyncIterable<{ content?: string }>) {
+        if (chunk.content) fullContent += chunk.content;
+      }
+
+      return parseCategoryOptionsResult(fullContent);
+    } else {
+      // Demo: backend proxy
+      const urls = getURLs();
+      const response = await fetch(`${urls.apiUrl}/api/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: 'You are an eccentric legendary Hollywood stylist. Generate transformation options in JSON format exactly as requested.' },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 4000,
+          temperature: 0.8,
+        }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Category options generation failed: ${response.status}`);
+      }
+
+      // Read SSE stream with proper line buffering
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) fullContent += data.content;
+            } catch {
+              // ignore parse errors on individual lines
+            }
+          }
+        }
+      }
+
+      return parseCategoryOptionsResult(fullContent);
+    }
+  } catch (error) {
+    console.error(`[TransformationService] Error generating options for "${categoryName}":`, error);
+    // Return fallback transformations for matching category
+    return getFallbackTransformationsForCategory(photoAnalysis, categoryName);
+  }
+}
+
+/**
+ * Find fallback transformations for a specific category name.
+ */
+function getFallbackTransformationsForCategory(
+  photoAnalysis: PhotoAnalysis,
+  categoryName: string
+): GeneratedTransformation[] {
+  const subject = photoAnalysis.subjectDescription || 'the person';
+  const neg = 'deformed, distorted, bad quality, blurry';
+
+  const fallbackMap: Record<string, GeneratedTransformation[]> = {
+    'Hair Color': [
+      { id: 'fallback-platinum-blonde', name: 'Platinum Blonde', prompt: `Change ${subject}'s hair to icy platinum blonde with a luminous shine while preserving facial features and identity`, pitch: 'Platinum is always a power move', intensity: 0.75, negativePrompt: neg, icon: '🤍' },
+      { id: 'fallback-copper-auburn', name: 'Copper Auburn', prompt: `Change ${subject}'s hair to rich copper auburn with warm highlights while preserving facial features and identity`, pitch: 'This warm tone is going to make your eyes pop', intensity: 0.7, negativePrompt: neg, icon: '🔥' },
+      { id: 'fallback-jet-black', name: 'Jet Black', prompt: `Change ${subject}'s hair to sleek jet black with a glossy mirror-like finish while preserving facial features and identity`, pitch: 'Dramatic, mysterious, absolutely iconic', intensity: 0.7, negativePrompt: neg, icon: '🖤' },
+      { id: 'fallback-rose-gold', name: 'Rose Gold', prompt: `Change ${subject}'s hair to soft rose gold with pink undertones while preserving facial features and identity`, pitch: 'Soft, trendy, and totally you', intensity: 0.7, negativePrompt: neg, icon: '🌸' },
+      { id: 'fallback-deep-burgundy', name: 'Deep Burgundy', prompt: `Change ${subject}'s hair to deep burgundy red with wine-toned highlights while preserving facial features and identity`, pitch: 'Rich and sultry — a head-turner for sure', intensity: 0.7, negativePrompt: neg, icon: '🍷' },
+      { id: 'fallback-honey-balayage', name: 'Honey Balayage', prompt: `Change ${subject}'s hair to a sun-kissed honey balayage with caramel highlights blended through while preserving facial features and identity`, pitch: 'Sun-kissed without the sun damage — perfection', intensity: 0.7, negativePrompt: neg, icon: '🍯' },
+    ],
+    'Hairstyle': [
+      { id: 'fallback-sleek-bob', name: 'Sleek Bob', prompt: `Give ${subject} a sharp chin-length sleek bob haircut with clean lines while preserving facial features and identity`, pitch: 'Clean lines, maximum impact', intensity: 0.75, negativePrompt: neg, icon: '✂️' },
+      { id: 'fallback-beach-waves', name: 'Beach Waves', prompt: `Give ${subject} effortless tousled beach waves with natural volume while preserving facial features and identity`, pitch: 'That effortless "just left the beach" energy', intensity: 0.65, negativePrompt: neg, icon: '🌊' },
+      { id: 'fallback-hollywood-curls', name: 'Hollywood Curls', prompt: `Give ${subject} glamorous old Hollywood finger waves and soft curls while preserving facial features and identity`, pitch: 'Classic Hollywood glamour never goes out of style', intensity: 0.7, negativePrompt: neg, icon: '🌟' },
+      { id: 'fallback-pixie-cut', name: 'Pixie Cut', prompt: `Give ${subject} a chic modern pixie cut with textured layers while preserving facial features and identity`, pitch: 'Bold, confident, and absolutely fierce', intensity: 0.8, negativePrompt: neg, icon: '⚡' },
+      { id: 'fallback-voluminous-blowout', name: 'Voluminous Blowout', prompt: `Give ${subject} a luxurious voluminous blowout with bouncy body and movement while preserving facial features and identity`, pitch: 'Big hair, big energy — let\'s go', intensity: 0.65, negativePrompt: neg, icon: '💨' },
+      { id: 'fallback-braided-updo', name: 'Braided Updo', prompt: `Give ${subject} an elegant braided updo hairstyle with intricate woven details while preserving facial features and identity`, pitch: 'Elegance with an edge — this updo means business', intensity: 0.75, negativePrompt: neg, icon: '👸' },
+    ],
+    'Makeup Looks': [
+      { id: 'fallback-smoky-eye', name: 'Smoky Eye', prompt: `Give ${subject} a dramatic smoky eye makeup look with blended dark eyeshadow while preserving facial features and identity`, pitch: 'The smoky eye is doing all the talking', intensity: 0.6, negativePrompt: neg, icon: '🖤' },
+      { id: 'fallback-natural-glow', name: 'Natural Glow', prompt: `Give ${subject} a dewy natural glow makeup look with luminous skin and soft highlights while preserving facial features and identity`, pitch: 'Glowing skin is always in season', intensity: 0.55, negativePrompt: neg, icon: '✨' },
+      { id: 'fallback-bold-red-lip', name: 'Bold Red Lip', prompt: `Give ${subject} a classic bold red lip with defined liner and flawless base while preserving facial features and identity`, pitch: 'A red lip is the ultimate confidence booster', intensity: 0.6, negativePrompt: neg, icon: '💋' },
+      { id: 'fallback-glam-contour', name: 'Glam Contour', prompt: `Give ${subject} a full glam contoured makeup look with sculpted cheekbones and highlighted features while preserving facial features and identity`, pitch: 'Sculpted to perfection, darling', intensity: 0.65, negativePrompt: neg, icon: '💫' },
+      { id: 'fallback-cat-eye', name: 'Cat Eye', prompt: `Give ${subject} a sharp winged cat eye liner look with dramatic lashes while preserving facial features and identity`, pitch: 'Sharp enough to cut glass — love it', intensity: 0.6, negativePrompt: neg, icon: '🐱' },
+      { id: 'fallback-sunset-eyes', name: 'Sunset Eyes', prompt: `Give ${subject} a warm sunset-inspired eyeshadow look blending orange, pink, and gold tones while preserving facial features and identity`, pitch: 'Golden hour, but make it permanent', intensity: 0.6, negativePrompt: neg, icon: '🌅' },
+    ],
+    'Vibes & Aesthetic': [
+      { id: 'fallback-red-carpet', name: 'Red Carpet Ready', prompt: `Give ${subject} a complete red carpet glamour transformation with elegant styling while preserving facial features and identity`, pitch: 'You\'re about to shut down every red carpet', intensity: 0.75, negativePrompt: neg, icon: '🏆' },
+      { id: 'fallback-streetwear-cool', name: 'Streetwear Cool', prompt: `Give ${subject} an edgy modern streetwear-inspired look with urban styling while preserving facial features and identity`, pitch: 'Street style with main character energy', intensity: 0.7, negativePrompt: neg, icon: '🔥' },
+      { id: 'fallback-ethereal', name: 'Ethereal Fantasy', prompt: `Give ${subject} an ethereal dreamy fantasy look with soft glowing features and romantic styling while preserving facial features and identity`, pitch: 'Giving fairy tale protagonist realness', intensity: 0.75, negativePrompt: neg, icon: '🧚' },
+      { id: 'fallback-retro-vintage', name: 'Retro Vintage', prompt: `Give ${subject} a retro vintage 1960s inspired look with classic styling while preserving facial features and identity`, pitch: 'Timeless vintage — because classics never die', intensity: 0.7, negativePrompt: neg, icon: '📷' },
+      { id: 'fallback-punk-edge', name: 'Punk Edge', prompt: `Give ${subject} a bold punk-inspired look with edgy dramatic styling while preserving facial features and identity`, pitch: 'Rules are meant to be broken, gorgeous', intensity: 0.8, negativePrompt: neg, icon: '🎸' },
+      { id: 'fallback-90s-supermodel', name: '90s Supermodel', prompt: `Give ${subject} a 1990s supermodel look with brown liner, nude lip, and effortless blown-out hair while preserving facial features and identity`, pitch: 'Cindy Crawford called — she wants her vibe back', intensity: 0.7, negativePrompt: neg, icon: '🕶️' },
+    ],
+    'Skin & Glow': [
+      { id: 'fallback-glass-skin', name: 'Glass Skin', prompt: `Give ${subject} a flawless dewy glass skin complexion with a luminous healthy glow while preserving facial features and identity`, pitch: 'That lit-from-within glow everyone is chasing', intensity: 0.5, negativePrompt: neg, icon: '💧' },
+      { id: 'fallback-sun-kissed', name: 'Sun-Kissed Bronze', prompt: `Give ${subject} a warm sun-kissed bronzed complexion with natural freckles and golden glow while preserving facial features and identity`, pitch: 'Fresh off a Mediterranean vacation — no passport needed', intensity: 0.55, negativePrompt: neg, icon: '☀️' },
+      { id: 'fallback-porcelain', name: 'Porcelain Finish', prompt: `Give ${subject} a smooth flawless porcelain skin finish with an even matte complexion while preserving facial features and identity`, pitch: 'Flawless doesn\'t even begin to cover it', intensity: 0.5, negativePrompt: neg, icon: '🤍' },
+      { id: 'fallback-rosy-cheeks', name: 'Rosy Flush', prompt: `Give ${subject} a fresh rosy-cheeked flush with natural pink blushed cheeks and healthy radiance while preserving facial features and identity`, pitch: 'That just-pinched-your-cheeks freshness', intensity: 0.5, negativePrompt: neg, icon: '🌹' },
+      { id: 'fallback-airbrushed', name: 'Airbrushed Glam', prompt: `Give ${subject} a smooth airbrushed glamour complexion with soft-focus skin and highlighted cheekbones while preserving facial features and identity`, pitch: 'Magazine cover ready — no retouching needed', intensity: 0.55, negativePrompt: neg, icon: '📸' },
+      { id: 'fallback-natural-beauty', name: 'Natural Beauty', prompt: `Enhance ${subject}'s natural features with minimal subtle improvements for a fresh-faced clean beauty look while preserving facial features and identity`, pitch: 'Just you, but turned up to eleven', intensity: 0.45, negativePrompt: neg, icon: '🌿' },
+    ],
+    'Outfit & Style': [
+      { id: 'fallback-leather-jacket', name: 'Leather Jacket', prompt: `Put ${subject} in a stylish black leather jacket with an effortlessly cool look while preserving facial features and identity`, pitch: 'Instant attitude upgrade — leather never lies', intensity: 0.7, negativePrompt: neg, icon: '🧥' },
+      { id: 'fallback-elegant-blazer', name: 'Power Blazer', prompt: `Put ${subject} in a tailored power blazer with sharp shoulders and a polished professional look while preserving facial features and identity`, pitch: 'Boss energy — the boardroom won\'t know what hit it', intensity: 0.7, negativePrompt: neg, icon: '💼' },
+      { id: 'fallback-streetwear-hoodie', name: 'Streetwear Hoodie', prompt: `Put ${subject} in a trendy oversized streetwear hoodie with an urban casual vibe while preserving facial features and identity`, pitch: 'Cozy meets cool — the best combo', intensity: 0.65, negativePrompt: neg, icon: '🔥' },
+      { id: 'fallback-denim-jacket', name: 'Denim Jacket', prompt: `Put ${subject} in a classic denim jacket with a casual effortless style while preserving facial features and identity`, pitch: 'A denim jacket makes everything better — fact', intensity: 0.65, negativePrompt: neg, icon: '👖' },
+      { id: 'fallback-evening-formal', name: 'Evening Formal', prompt: `Put ${subject} in stunning elegant formal evening wear with luxurious styling while preserving facial features and identity`, pitch: 'Red carpet ready from head to toe', intensity: 0.75, negativePrompt: neg, icon: '👔' },
+      { id: 'fallback-casual-chic', name: 'Casual Chic', prompt: `Put ${subject} in a stylish casual-chic outfit with an effortlessly polished look while preserving facial features and identity`, pitch: 'Looking this good shouldn\'t be this easy', intensity: 0.65, negativePrompt: neg, icon: '✨' },
+    ],
+    'Accessories': [
+      { id: 'fallback-statement-glasses', name: 'Statement Glasses', prompt: `Add stylish bold statement eyeglasses to ${subject} while preserving facial features and identity`, pitch: 'Smart AND stylish — the full package', intensity: 0.55, negativePrompt: neg, icon: '🤓' },
+      { id: 'fallback-statement-earrings', name: 'Statement Earrings', prompt: `Add glamorous large statement earrings to ${subject} while preserving facial features and identity`, pitch: 'The earrings that steal the show', intensity: 0.55, negativePrompt: neg, icon: '💎' },
+      { id: 'fallback-sunglasses', name: 'Designer Sunglasses', prompt: `Add sleek designer sunglasses to ${subject} while preserving facial features and identity`, pitch: 'Instant cool factor — just add shades', intensity: 0.55, negativePrompt: neg, icon: '😎' },
+      { id: 'fallback-headband', name: 'Chic Headband', prompt: `Add a fashionable embellished headband to ${subject}'s hair while preserving facial features and identity`, pitch: 'A little detail that changes everything', intensity: 0.5, negativePrompt: neg, icon: '👑' },
+      { id: 'fallback-choker', name: 'Elegant Choker', prompt: `Add an elegant choker necklace to ${subject} while preserving facial features and identity`, pitch: 'The perfect finishing touch', intensity: 0.5, negativePrompt: neg, icon: '📿' },
+      { id: 'fallback-hat', name: 'Wide-Brim Hat', prompt: `Add a chic wide-brim hat to ${subject} for a fashionable sophisticated look while preserving facial features and identity`, pitch: 'A hat this good should be illegal', intensity: 0.6, negativePrompt: neg, icon: '🎩' },
+    ],
+    'Eye Color': [
+      { id: 'fallback-emerald-eyes', name: 'Emerald Green', prompt: `Change ${subject}'s eye color to striking emerald green while preserving facial features and identity`, pitch: 'Green eyes that stop traffic', intensity: 0.55, negativePrompt: neg, icon: '💚' },
+      { id: 'fallback-ice-blue', name: 'Ice Blue', prompt: `Change ${subject}'s eye color to piercing ice blue while preserving facial features and identity`, pitch: 'Those baby blues are going to be legendary', intensity: 0.55, negativePrompt: neg, icon: '💙' },
+      { id: 'fallback-honey-amber', name: 'Honey Amber', prompt: `Change ${subject}'s eye color to warm honey amber with golden flecks while preserving facial features and identity`, pitch: 'Warm, golden, and absolutely mesmerizing', intensity: 0.55, negativePrompt: neg, icon: '🍯' },
+      { id: 'fallback-violet-eyes', name: 'Violet', prompt: `Change ${subject}'s eye color to a rare striking violet purple while preserving facial features and identity`, pitch: 'Elizabeth Taylor energy — iconic', intensity: 0.55, negativePrompt: neg, icon: '💜' },
+      { id: 'fallback-hazel-eyes', name: 'Warm Hazel', prompt: `Change ${subject}'s eye color to warm hazel with green and brown tones while preserving facial features and identity`, pitch: 'Hazel eyes that shift in every light', intensity: 0.5, negativePrompt: neg, icon: '🤎' },
+      { id: 'fallback-steel-grey', name: 'Steel Grey', prompt: `Change ${subject}'s eye color to cool steel grey while preserving facial features and identity`, pitch: 'Mysterious and magnetic — impossible to look away', intensity: 0.55, negativePrompt: neg, icon: '🩶' },
+    ],
+    'Facial Hair': [
+      { id: 'fallback-clean-shave', name: 'Clean Shave', prompt: `Give ${subject} a perfectly clean-shaven smooth face while preserving facial features and identity`, pitch: 'Fresh-faced and flawless', intensity: 0.6, negativePrompt: neg, icon: '✨' },
+      { id: 'fallback-designer-stubble', name: 'Designer Stubble', prompt: `Give ${subject} perfectly groomed designer stubble with a rugged refined look while preserving facial features and identity`, pitch: 'That effortless five o\'clock shadow — chefs kiss', intensity: 0.55, negativePrompt: neg, icon: '😏' },
+      { id: 'fallback-full-beard', name: 'Full Beard', prompt: `Give ${subject} a thick well-groomed full beard with clean edges while preserving facial features and identity`, pitch: 'A beard this good takes commitment — or just one click', intensity: 0.65, negativePrompt: neg, icon: '🧔' },
+      { id: 'fallback-goatee', name: 'Classic Goatee', prompt: `Give ${subject} a sharp classic goatee with clean lines while preserving facial features and identity`, pitch: 'Focused, intentional, and sharp as ever', intensity: 0.6, negativePrompt: neg, icon: '🎯' },
+      { id: 'fallback-mustache', name: 'Statement Mustache', prompt: `Give ${subject} a bold statement mustache with a classic vintage flair while preserving facial features and identity`, pitch: 'The mustache is making a comeback and you\'re leading the charge', intensity: 0.6, negativePrompt: neg, icon: '🥸' },
+      { id: 'fallback-mutton-chops', name: 'Mutton Chops', prompt: `Give ${subject} bold retro mutton chop sideburns with a distinctive look while preserving facial features and identity`, pitch: 'Wolverine wishes he looked this good', intensity: 0.65, negativePrompt: neg, icon: '🐺' },
+    ],
+  };
+
+  // Try exact match first, then case-insensitive partial match
+  if (fallbackMap[categoryName]) {
+    return fallbackMap[categoryName];
+  }
+
+  const lowerName = categoryName.toLowerCase();
+  for (const [key, value] of Object.entries(fallbackMap)) {
+    if (key.toLowerCase().includes(lowerName) || lowerName.includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+
+  // Ultimate fallback: return Hair Color transformations
+  return fallbackMap['Hair Color'];
 }

@@ -14,7 +14,7 @@ function CategoryNav({ categories, selectedCategory, onSelectCategory, isLoading
       <nav className="studio-sidebar" aria-label="Transformation categories">
         {[...Array(4)].map((_, i) => (
           <div key={i} className="flex flex-col items-center gap-1 rounded-xl px-2 py-3">
-            <div className="h-6 w-6 animate-pulse rounded-lg bg-white/5" />
+            <div className="category-thumbnail-placeholder animate-pulse" />
             <div className="h-3 w-12 animate-pulse rounded bg-white/5" />
           </div>
         ))}
@@ -47,7 +47,16 @@ function CategoryNav({ categories, selectedCategory, onSelectCategory, isLoading
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
               />
             )}
-            <span className="relative text-lg md:text-xl">{category.icon}</span>
+            {category.isPopulating && (
+              <motion.div
+                className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary-400"
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+              />
+            )}
+            <div className="category-thumbnail-container relative">
+              <span className="text-lg md:text-xl">{category.icon}</span>
+            </div>
             <span className="relative text-center text-[10px] font-medium leading-tight md:text-xs">
               {category.name}
             </span>
