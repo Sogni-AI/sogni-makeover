@@ -793,12 +793,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     // Track auto-pilot iterations — stop if limit reached
     let autoPilotActive = isAutoPilot;
+    let autoPilotJustCompleted = false;
     if (isAutoPilot) {
       autoPilotIterationsRef.current++;
       if (autoPilotIterationsRef.current > MAX_AUTO_PILOT_ITERATIONS) {
         setIsAutoPilot(false);
         autoPilotIterationsRef.current = 0;
         autoPilotActive = false;
+        autoPilotJustCompleted = true;
       }
     }
 
@@ -809,6 +811,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     const autoPilotConfig: AutoPilotConfig = {
       enabled: autoPilotActive && remaining > 0,
       remainingIterations: remaining,
+      justCompleted: autoPilotJustCompleted,
     };
 
     // Build context about available categories and applied history for auto-pilot diversity
@@ -819,7 +822,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     const ngEditStack = getEditStack();
     const ngAppliedList = ngEditStack.map(s => `- "${s.transformation.name}"`).join('\n');
 
-    const syntheticMessage = `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze.
+    const syntheticMessage = autoPilotJustCompleted
+      ? `[Generation complete: "${transformation.name}" was just applied. This was the FINAL auto-pilot transformation — the session is now complete.
+
+All transformations applied during this session:
+${ngAppliedList}
+
+AUTO-PILOT COMPLETE: Call compare_before_after for a final look, then give a celebratory recap of the full makeover journey. Highlight a few standout transformations and hand back to the client — they're in control now.]`
+      : `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze.
 
 Already applied (do NOT repeat any of these):
 ${ngAppliedList}

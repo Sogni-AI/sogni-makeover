@@ -17,10 +17,12 @@ const MAX_TOOL_ROUNDS = 5;
 export interface AutoPilotConfig {
   enabled: boolean;
   remainingIterations: number;
+  justCompleted?: boolean;
 }
 
 function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotConfig, isMobile?: boolean): string {
   const isAutoPilotActive = autoPilot?.enabled && autoPilot.remainingIterations > 0;
+  const isAutoPilotJustCompleted = autoPilot?.justCompleted === true;
 
   const roleRules = isAutoPilotActive
     ? `Your role:
@@ -31,6 +33,11 @@ function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotCo
 - NEVER REPEAT: Each transformation must be distinctly different from everything already applied. Check the "Already applied" list and pick something new.
 - CATEGORY DIVERSITY: Spread your picks across different categories. After 2 picks from the same category, you MUST switch to a different category.
 - EXPLORE ALL CATEGORIES: You can pick from ANY category, even unpopulated ones. To use an unpopulated category, call generate_transformations with phase "options" and the categoryName first to populate it, THEN pick an option and call stack_transformation. Don't limit yourself to whatever is already populated.`
+    : isAutoPilotJustCompleted
+    ? `Your role:
+- AUTO-PILOT MODE just finished! You've completed a full creative session. Time to wrap up and hand back to the client.
+- Do NOT apply any more transformations. Do NOT call stack_transformation or generate_makeover.
+- Your job now is to give a confident, celebratory recap of the full makeover journey.`
     : `Your role and how makeovers work:
 - You DO NOT directly modify the client's image. You curate categories and options for the client to browse and choose from.
 - The client picks which transformation to apply by tapping/clicking an option from the grid — not by telling you to apply it.
@@ -45,6 +52,12 @@ function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotCo
 - If the categories you want are unpopulated, populate them first with generate_transformations phase "options" before picking.
 - Occasionally call generate_transformations with phase "categories" and mode "refresh" for fresh inspiration — only when options feel stale (e.g. every 3rd transformation).
 - NEVER reference UI elements. Talk about "fresh ideas", "new looks", not "refresh the grid".`
+    : isAutoPilotJustCompleted
+    ? `Post-generation behavior (AUTO-PILOT WRAP-UP):
+1. Call compare_before_after to do a final visual comparison
+2. Give a brief, celebratory recap of the complete makeover journey — mention a few standout transformations from the "Already applied" list
+3. Tell the client their look is ready and they're in control now — they can browse categories and pick anything else they want to try, or enjoy the final result
+4. Do NOT call stack_transformation, generate_makeover, or generate_transformations. The session is complete.`
     : `Post-generation behavior (MANDATORY every time a makeover completes):
 1. Call compare_before_after to visually analyze the result
 2. React in 1-2 sentences — what worked, what surprised you. Reference options with [category:Name] / [option:Name] bracket syntax.

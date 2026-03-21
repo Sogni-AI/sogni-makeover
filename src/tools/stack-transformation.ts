@@ -9,10 +9,11 @@ const definition = {
     parameters: {
       type: 'object',
       properties: {
+        name: { type: 'string', description: 'Short display name for this look (e.g. "Smoky Eye Glam")' },
         prompt: { type: 'string', description: 'The transformation prompt to apply on top of the current result' },
         intensity: { type: 'number', description: 'Denoising strength 0.3-0.95' },
       },
-      required: ['prompt'],
+      required: ['name', 'prompt'],
     },
   },
 };
@@ -21,6 +22,7 @@ async function handler(
   args: Record<string, unknown>,
   context: MakeoverToolContext
 ): Promise<ToolResult> {
+  const name = typeof args.name === 'string' ? args.name : undefined;
   const prompt = String(args.prompt || '');
   const intensity = typeof args.intensity === 'number' ? args.intensity : undefined;
 
@@ -38,6 +40,7 @@ async function handler(
 
   try {
     const result = await context.generateFromPrompt({
+      name,
       prompt,
       intensity,
       useStackedInput: true,
@@ -47,7 +50,7 @@ async function handler(
     // (e.g. compare_before_after) can access this step before React renders.
     const prevGetEditStack = context.getEditStack;
     const syntheticStep = {
-      transformation: { id: `tool-${Date.now()}`, name: prompt.slice(0, 30), category: 'ai-generated' as const, subcategory: 'chat', prompt, icon: '' },
+      transformation: { id: `tool-${Date.now()}`, name: name || prompt.slice(0, 30), category: 'ai-generated' as const, subcategory: 'chat', prompt, icon: '' },
       resultImageUrl: result.resultUrl,
       resultImageBase64: '',
       timestamp: Date.now(),
