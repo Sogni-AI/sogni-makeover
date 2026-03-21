@@ -232,7 +232,7 @@
 
   /* When chat has content, give it a fixed compact height */
   .stylist-bubble.stylist-bubble--active {
-    height: 210px;
+    height: 200px;
     display: flex;
     flex-direction: column;
   }
