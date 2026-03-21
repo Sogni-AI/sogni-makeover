@@ -44,11 +44,16 @@ function TransformationPicker({
   // Portal-based tooltip state
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const autoCloseRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const showTooltip = useCallback((e: React.MouseEvent<HTMLButtonElement>, pitch: string) => {
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
+    }
+    if (autoCloseRef.current) {
+      clearTimeout(autoCloseRef.current);
+      autoCloseRef.current = null;
     }
     const rect = e.currentTarget.getBoundingClientRect();
     setTooltip({
@@ -56,9 +61,14 @@ function TransformationPicker({
       x: rect.left + rect.width / 2,
       y: rect.top,
     });
+    autoCloseRef.current = setTimeout(() => setTooltip(null), 8000);
   }, []);
 
   const hideTooltip = useCallback(() => {
+    if (autoCloseRef.current) {
+      clearTimeout(autoCloseRef.current);
+      autoCloseRef.current = null;
+    }
     hideTimeoutRef.current = setTimeout(() => setTooltip(null), 100);
   }, []);
 
