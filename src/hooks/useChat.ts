@@ -807,7 +807,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       remainingIterations: remaining,
     };
 
-    const syntheticMessage = `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze. Give me your take on how it turned out, then pick what to layer on next.]`;
+    // Build context about available categories and applied history for auto-pilot diversity
+    const ngCategories = generatedCategoriesRef.current;
+    const ngCategoryList = ngCategories.map(c =>
+      `- ${c.name}${c.populated ? ` (${c.transformations.length} options)` : ' (unpopulated — populate first to browse)'}`
+    ).join('\n');
+    const ngEditStack = getEditStack();
+    const ngAppliedList = ngEditStack.map(s => `- "${s.transformation.name}"`).join('\n');
+
+    const syntheticMessage = `[Generation complete: "${transformation.name}" was just applied. The result is ready for you to analyze.
+
+Already applied (do NOT repeat any of these):
+${ngAppliedList}
+
+Available categories:
+${ngCategoryList}
+
+Give me your take on how it turned out, then pick what to layer on next. Choose from a DIFFERENT category than recent picks. If you want something from an unpopulated category, populate it first with generate_transformations phase "options".]`;
 
     // Create streaming assistant placeholder (no user message shown)
     const assistantPlaceholderId = `msg-${Date.now()}-analysis`;
@@ -1125,9 +1141,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     const autoPilotConfig: AutoPilotConfig = { enabled: true, remainingIterations: remaining };
 
     const hasExistingResult = getEditStackDepth() > 0;
+
+    // Build context about available categories and what's already been done
+    const apCategories = generatedCategoriesRef.current;
+    const apCategoryList = apCategories.map(c =>
+      `- ${c.name}${c.populated ? ` (${c.transformations.length} options ready)` : ' (unpopulated — call generate_transformations with phase "options" to populate)'}`
+    ).join('\n');
+    const apEditStack = getEditStack();
+    const apAppliedList = apEditStack.length > 0
+      ? `\n\nAlready applied (do NOT repeat any of these):\n${apEditStack.map(s => `- "${s.transformation.name}"`).join('\n')}`
+      : '';
+
     const syntheticMessage = hasExistingResult
-      ? '[Auto-Pilot activated. Pick the transformation you are most excited about and layer it on with stack_transformation. Go!]'
-      : '[Auto-Pilot activated. Pick the transformation you are most excited about and apply it with generate_makeover. Go!]';
+      ? `[Auto-Pilot activated. Available categories:\n${apCategoryList}${apAppliedList}\n\nPick a transformation from a category you haven't used yet and layer it on with stack_transformation. Vary your choices across categories — don't pile on the same one! If you want something from an unpopulated category, populate it first.]`
+      : `[Auto-Pilot activated. Available categories:\n${apCategoryList}\n\nPick the transformation you are most excited about and apply it with generate_makeover. Go!]`;
 
     const assistantPlaceholderId = `msg-${Date.now()}-autopilot`;
     setMessages((prev) => [

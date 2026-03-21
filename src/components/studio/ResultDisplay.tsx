@@ -1,15 +1,12 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-import BeforeAfterSlider from '@/components/common/BeforeAfterSlider';
 
 interface ResultDisplayProps {
   resultUrl: string;
 }
 
 function ResultDisplay({ resultUrl }: ResultDisplayProps) {
-  const { originalImageUrl, setCurrentView, editStack } = useApp();
-  const [showComparison, setShowComparison] = useState(false);
+  const { setCurrentView, editStack } = useApp();
 
   const handleDownload = async () => {
     try {
@@ -30,46 +27,18 @@ function ResultDisplay({ resultUrl }: ResultDisplayProps) {
 
   return (
     <div className="relative h-full w-full">
-      <AnimatePresence mode="wait">
-        {showComparison && originalImageUrl ? (
-          <motion.div
-            key="comparison"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex h-full w-full items-center justify-center p-4"
-          >
-            <BeforeAfterSlider
-              beforeImage={
-                editStack.mode === 'stacked' && editStack.currentIndex > 0
-                  ? editStack.steps[editStack.currentIndex - 1].resultImageUrl
-                  : originalImageUrl
-              }
-              afterImage={resultUrl}
-              originalImage={
-                editStack.mode === 'stacked' && editStack.currentIndex > 0
-                  ? originalImageUrl
-                  : undefined
-              }
-              className="max-h-full"
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="result"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            className="h-full w-full"
-          >
-            <img
-              src={resultUrl}
-              alt="Transformation result"
-              className="h-full w-full object-contain"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <motion.div
+        key="result"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="h-full w-full"
+      >
+        <img
+          src={resultUrl}
+          alt="Transformation result"
+          className="h-full w-full object-contain"
+        />
+      </motion.div>
 
       {/* Floating action bar */}
       <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-primary-400/10 bg-surface-900/80 px-2 py-1.5 shadow-xl backdrop-blur-md">
@@ -99,17 +68,7 @@ function ResultDisplay({ resultUrl }: ResultDisplayProps) {
         )}
         <div className="h-4 w-px bg-primary-400/10" />
 
-        {/* Existing actions */}
-        <button
-          onClick={() => setShowComparison(!showComparison)}
-          className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium text-white/70 transition-colors hover:bg-primary-400/[0.06] hover:text-white"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-          </svg>
-          {showComparison ? 'Result' : 'Compare'}
-        </button>
-        <div className="h-4 w-px bg-primary-400/10" />
+        {/* Actions */}
         <button
           onClick={handleDownload}
           className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium text-white/70 transition-colors hover:bg-primary-400/[0.06] hover:text-white"
