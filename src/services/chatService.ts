@@ -31,8 +31,8 @@ function buildSystemPrompt(photoAnalysis: PhotoAnalysis, autoPilot?: AutoPilotCo
     : `Your role and how makeovers work:
 - You DO NOT directly modify the client's image. You curate categories and options for the client to browse and choose from.
 - The client picks which transformation to apply by tapping/clicking an option from the grid — not by telling you to apply it.
-- If the client seems confused about how to apply a look or asks you to "do it" / "apply it", remind them to pick an option from the grid.${isMobile ? ' Since they\'re on mobile, let them know they can close the chat to see and tap the makeover buttons.' : ''}
-- If the client seems stuck or unsure how to proceed, gently remind them they can browse the categories and tap any option that catches their eye.${isMobile ? ' Suggest closing the chat panel to see the full makeover grid.' : ''}`;
+- If the client seems confused about how to apply a look or asks you to "do it" / "apply it", remind them to pick an option from the grid.
+- If the client seems stuck or unsure how to proceed, gently remind them they can browse the categories and tap any option that catches their eye.`;
 
   const postGenRules = isAutoPilotActive
     ? `Post-generation behavior (MANDATORY every time a makeover completes):
@@ -80,7 +80,7 @@ ${roleRules}
 
 ${postGenRules}
 
-Client device: ${isMobile ? 'mobile (they need to close the chat panel to see and tap the makeover grid)' : 'desktop (they can see the makeover grid alongside the chat)'}
+Client device: ${isMobile ? 'mobile (the chat panel and makeover grid are both visible — the client can scroll to see options)' : 'desktop (they can see the makeover grid alongside the chat)'}
 
 Client analysis:
 ${JSON.stringify(photoAnalysis, null, 2)}`;

@@ -220,7 +220,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
 
       const recommended = result.data.recommendedCategory as string;
-      if (recommended && isAutoPilotRef.current) {
+      if (recommended) {
+        // Always auto-select and auto-populate the recommended category so the
+        // user immediately sees options (not just empty shells).
         onCategoryRecommended?.(recommended);
         // Queue auto-populate for after current streaming completes (avoids concurrent sendChatMessage)
         pendingPopulateCategoryRef.current = recommended;
@@ -257,7 +259,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }
 
     const recommended = result.data.recommendedCategory as string;
-    if (recommended && isAutoPilotRef.current) {
+    if (recommended) {
       onCategoryRecommended?.(recommended);
     }
   }, [onCategoryRecommended]);
@@ -342,7 +344,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   }, []);
 
   const drainPendingPopulateCategory = useCallback(() => {
-    if (!isStreamingRef.current && pendingPopulateCategoryRef.current) {
+    if (!streamingLockRef.current && pendingPopulateCategoryRef.current) {
       const catName = pendingPopulateCategoryRef.current;
       pendingPopulateCategoryRef.current = null;
       populateCategoryRef.current?.(catName);
@@ -979,7 +981,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (!cat || cat.populated || cat.isPopulating) return;
 
     // If streaming is active, queue for when streaming ends
-    if (streamingLockRef.current || isStreamingRef.current) {
+    if (streamingLockRef.current) {
       pendingPopulateCategoryRef.current = categoryName;
       return;
     }
