@@ -15,6 +15,7 @@ import { generateCategoryOptions } from '@/services/transformationService';
 import { buildAutoEnhancePrompt } from '@/constants/settings';
 import { getURLs } from '@/config/urls';
 import type { AutoEnhanceResult } from '@/hooks/useAutoEnhance';
+import { trimPadding, cropToPortrait } from '@/services/imageProcessing';
 
 interface UseChatOptions {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -564,7 +565,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         if (result) {
           const enhancedResponse = await fetch(result.imageUrl);
           const enhancedBlob = await enhancedResponse.blob();
-          const enhancedFile = new File([enhancedBlob], 'enhanced-capture.jpg', { type: 'image/jpeg' });
+          let enhancedFile = new File([enhancedBlob], 'enhanced-capture.jpg', { type: 'image/jpeg' });
+          enhancedFile = await trimPadding(enhancedFile);
+          enhancedFile = await cropToPortrait(enhancedFile);
           setOriginalImage(enhancedFile);
         }
       } catch {

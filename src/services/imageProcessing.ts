@@ -164,6 +164,125 @@ export async function cropToPortrait(file: File): Promise<File> {
 }
 
 /**
+ * Detect and trim uniform-colored padding around the subject of an image.
+ * Samples corner pixels to determine the background color, then scans inward
+ * from each edge to find the content bounds. Returns the original file
+ * unchanged if trimming would remove less than 10% on both axes.
+ */
+export async function trimPadding(file: File): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const { width, height } = bitmap;
+
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) { bitmap.close(); return file; }
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  const { data } = ctx.getImageData(0, 0, width, height);
+
+  const px = (x: number, y: number): [number, number, number] => {
+    const i = (y * width + x) * 4;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+
+  // Sample background from 5×5 patches at each corner
+  const sampleCorner = (cx: number, cy: number) => {
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const x = Math.max(0, Math.min(width - 1, cx + dx));
+        const y = Math.max(0, Math.min(height - 1, cy + dy));
+        const [pr, pg, pb] = px(x, y);
+        r += pr; g += pg; b += pb; n++;
+      }
+    }
+    return [r / n, g / n, b / n] as const;
+  };
+
+  const corners = [
+    sampleCorner(2, 2),
+    sampleCorner(width - 3, 2),
+    sampleCorner(2, height - 3),
+    sampleCorner(width - 3, height - 3),
+  ];
+  const bg: [number, number, number] = [
+    corners.reduce((s, c) => s + c[0], 0) / 4,
+    corners.reduce((s, c) => s + c[1], 0) / 4,
+    corners.reduce((s, c) => s + c[2], 0) / 4,
+  ];
+
+  const DIST_THRESHOLD = 35;
+  const BG_RATIO = 0.85;
+
+  const isBg = (x: number, y: number) => {
+    const [r, g, b] = px(x, y);
+    return Math.sqrt((r - bg[0]) ** 2 + (g - bg[1]) ** 2 + (b - bg[2]) ** 2) < DIST_THRESHOLD;
+  };
+
+  const isRowPadding = (y: number) => {
+    const step = Math.max(1, Math.floor(width / 64));
+    let bgCount = 0, samples = 0;
+    for (let x = 0; x < width; x += step) {
+      if (isBg(x, y)) bgCount++;
+      samples++;
+    }
+    return bgCount / samples >= BG_RATIO;
+  };
+
+  const isColPadding = (x: number, startY: number, endY: number) => {
+    const step = Math.max(1, Math.floor((endY - startY) / 64));
+    let bgCount = 0, samples = 0;
+    for (let y = startY; y <= endY; y += step) {
+      if (isBg(x, y)) bgCount++;
+      samples++;
+    }
+    return bgCount / samples >= BG_RATIO;
+  };
+
+  let top = 0;
+  for (let y = 0; y < height; y++) {
+    if (!isRowPadding(y)) { top = y; break; }
+  }
+  let bottom = height - 1;
+  for (let y = height - 1; y >= top; y--) {
+    if (!isRowPadding(y)) { bottom = y; break; }
+  }
+  let left = 0;
+  for (let x = 0; x < width; x++) {
+    if (!isColPadding(x, top, bottom)) { left = x; break; }
+  }
+  let right = width - 1;
+  for (let x = width - 1; x >= left; x--) {
+    if (!isColPadding(x, top, bottom)) { right = x; break; }
+  }
+
+  // Add a small margin (2% of content size)
+  const margin = Math.round(Math.max(right - left, bottom - top) * 0.02);
+  top = Math.max(0, top - margin);
+  bottom = Math.min(height - 1, bottom + margin);
+  left = Math.max(0, left - margin);
+  right = Math.min(width - 1, right + margin);
+
+  const cropW = right - left + 1;
+  const cropH = bottom - top + 1;
+
+  // Skip if trim is negligible (less than 10% removed on both axes)
+  if (cropW > width * 0.9 && cropH > height * 0.9) {
+    return file;
+  }
+
+  const outCanvas = new OffscreenCanvas(cropW, cropH);
+  const outCtx = outCanvas.getContext('2d');
+  if (!outCtx) return file;
+  outCtx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
+
+  const outputType = ACCEPTED_IMAGE_TYPES.includes(file.type) ? file.type : 'image/png';
+  const blob = await outCanvas.convertToBlob({ type: outputType, quality: 0.92 });
+  return new File([blob], file.name, { type: outputType, lastModified: Date.now() });
+}
+
+/**
  * Validate an image file for type and size constraints.
  *
  * Accepted types: JPEG, PNG, WebP

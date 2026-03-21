@@ -60,11 +60,14 @@ function StylistBubble({
     .reverse()
     .find((msg) => msg.role === 'assistant' && !msg.isStreaming && !msg.isToolProgress);
 
-  const isEnhanceMessage = messages.length === 1 && messages[0]?.id?.endsWith('-enhance');
+  // Show default suggestions when only system-generated messages exist (greeting, enhance status)
+  // and the user hasn't sent anything yet
+  const hasUserMessage = messages.some((msg) => msg.role === 'user');
+  const isOnlyEnhanceMessage = messages.length === 1 && messages[0]?.id?.endsWith('-enhance');
   const suggestions =
     latestNonStreamingAssistant?.suggestions && latestNonStreamingAssistant.suggestions.length > 0
       ? latestNonStreamingAssistant.suggestions
-      : messages.length <= 1 && !isEnhanceMessage
+      : !hasUserMessage && !isOnlyEnhanceMessage
         ? DEFAULT_SUGGESTIONS
         : [];
 
@@ -144,6 +147,8 @@ function StylistBubble({
 
   useEffect(() => {
     if (!isStreaming && displayedMessage) {
+      // Don't auto-dismiss when suggestion chips are showing — user should click one
+      if (suggestions.length > 0) return;
       // On mobile, chat persists — don't auto-dismiss
       if (!window.matchMedia('(max-width: 767px)').matches) {
         startDismissTimer();
