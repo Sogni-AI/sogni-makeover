@@ -45,7 +45,7 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode {
  * Parses message content for [category:Name] and [option:Name] tokens,
  * rendering them as clickable styled buttons, and renders inline markdown.
  */
-function parseMessageContent(
+export function parseMessageContent(
   content: string,
   onSelectCategory?: (name: string) => void,
   onSelectTransformation?: (name: string) => void

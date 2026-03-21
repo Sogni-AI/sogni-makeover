@@ -70,7 +70,9 @@ function TransformationPicker({
         <div className="transformation-grid">
           {[...Array(8)].map((_, i) => (
             <div key={i} className="transformation-card flex flex-col items-center gap-2 p-3">
-              <div className="thumbnail-placeholder animate-pulse" />
+              <div className="thumbnail-container">
+                <div className="thumbnail-placeholder animate-pulse" />
+              </div>
               <div className="h-3 w-16 animate-pulse rounded bg-white/5" />
               <div className="h-2 w-24 animate-pulse rounded bg-white/5" />
             </div>

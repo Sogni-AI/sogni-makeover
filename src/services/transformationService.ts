@@ -555,7 +555,7 @@ function buildCategoryOptionsPrompt(
     lookContext = `\n\nThe client currently looks like: ${currentLook}. Generate options that complement or build on their current look.`;
   }
 
-  return `Generate 12 transformation options for the "${categoryName}" category.
+  return `Generate 9 transformation options for the "${categoryName}" category.
 
 Category description: ${categoryDescription}
 Client: ${JSON.stringify(photoAnalysis, null, 2)}${lookContext}
@@ -578,7 +578,7 @@ Return JSON:
 
 Rules:
 - REALISM FIRST: All options should be professional, realistic transformations — things a real stylist, salon, or makeover artist would actually do. Stay grounded: real hair colors, real makeup techniques, real fashion and accessories. Avoid fantastical, costume-like, or sci-fi options UNLESS the client explicitly asked for creative or fantasy looks.
-- Generate exactly 12 transformation options for the "${categoryName}" category
+- Generate exactly 9 transformation options for the "${categoryName}" category
 - Write prompts with the actual subject description baked in (not generic "the person"): use "${photoAnalysis.subjectDescription || 'the person'}" as the subject
 - Set intensity (denoising strength) appropriate to how dramatic the change is: subtle 0.5-0.6, moderate 0.6-0.75, dramatic 0.75-0.95
 - Each pitch is a one-liner the stylist would say to sell the look — cheeky, confident, fun
