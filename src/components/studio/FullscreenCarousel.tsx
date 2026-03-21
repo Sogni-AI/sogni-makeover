@@ -21,7 +21,6 @@ interface FullscreenCarouselProps {
   canUndo?: boolean;
   canRedo?: boolean;
   onFullscreenCompare?: () => void;
-  stepCount?: number;
 }
 
 const backdropVariants = {
@@ -55,7 +54,7 @@ const panelVariants = {
   },
 };
 
-function FullscreenCarousel({ isOpen, onClose, items, initialIndex, onDownload, onShare, onUndo, onRedo, canUndo, canRedo, onFullscreenCompare, stepCount }: FullscreenCarouselProps) {
+function FullscreenCarousel({ isOpen, onClose, items, initialIndex, onDownload, onShare, onUndo, onRedo, canUndo, canRedo, onFullscreenCompare }: FullscreenCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [direction, setDirection] = useState(0);
   const touchStartX = useRef(0);

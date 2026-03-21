@@ -337,6 +337,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const populateCategoryRef = useRef<((categoryName: string) => Promise<void>) | null>(null);
   // Pending category to auto-populate once streaming ends (avoids concurrent sendChatMessage calls)
   const pendingPopulateCategoryRef = useRef<string | null>(null);
+  // Tracks whether a tool completed before its progress message was shown (for delayed display)
+  const toolCallDoneRef = useRef<{ value: boolean } | null>(null);
 
   // Refs + drain logic for queuing auto-analysis that arrives while streaming
   const pendingAnalysisRef = useRef<{ transformation: { name: string; prompt: string }; resultUrl: string } | null>(null);
@@ -1123,30 +1125,37 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
         {
           onToken: (token) => { enqueueToken(token); },
           onToolCallStart: (toolCall) => {
-            flushTokenQueue();
-            setMessages((prev) => {
-              const last = prev[prev.length - 1];
-              let base;
-              if (last?.isStreaming && !last.content.trim()) {
-                base = prev.slice(0, -1);
-              } else if (last?.isStreaming) {
-                base = [...prev.slice(0, -1), { ...last, isStreaming: false }];
-              } else {
-                base = prev;
-              }
-              return [
-                ...base,
-                {
-                  id: `tp-${Date.now()}-start`,
-                  role: 'assistant' as const,
-                  content: getToolMessage(toolCall.name),
-                  timestamp: Date.now(),
-                  isStreaming: false,
-                  isToolProgress: true,
-                  isToolDone: false,
-                },
-              ];
+            // Let the typewriter finish naturally instead of flushing,
+            // then show tool progress after a brief pause for readability
+            const toolDoneRef = { value: false };
+            deferUntilDrained(() => {
+              // Finalize the streaming message
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.isStreaming && !last.content.trim()) {
+                  return prev.slice(0, -1);
+                } else if (last?.isStreaming) {
+                  return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+                }
+                return prev;
+              });
+              // Brief delay so the user can read the completed acknowledgment
+              setTimeout(() => {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `tp-${Date.now()}-start`,
+                    role: 'assistant' as const,
+                    content: getToolMessage(toolCall.name),
+                    timestamp: Date.now(),
+                    isStreaming: false,
+                    isToolProgress: true,
+                    isToolDone: toolDoneRef.value,
+                  },
+                ]);
+              }, 800);
             });
+            toolCallDoneRef.current = toolDoneRef;
           },
           onToolCallComplete: (toolCall: ToolCall, result: ToolResult) => {
             setMessages((prev) => {
@@ -1157,6 +1166,8 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
                 updated[idx] = { ...updated[idx], isToolDone: true };
                 return updated;
               }
+              // Tool completed before progress message was shown
+              if (toolCallDoneRef.current) toolCallDoneRef.current.value = true;
               return prev;
             });
             if (toolCall.name === 'generate_transformations') {

@@ -298,6 +298,7 @@ function MakeoverStudio() {
             selectedCategory={selectedCategory}
             onSelectCategory={handleCategoryChange}
             isLoading={isCategoriesLoading}
+            thumbnailUrls={thumbnailUrls}
           />
 
           {/* Main content */}

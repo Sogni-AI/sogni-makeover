@@ -1,8 +1,9 @@
 /**
- * Hook to manage thumbnail generation for transformation cards.
+ * Hook to manage thumbnail generation for transformation cards and categories.
  *
- * Generates thumbnails for the currently selected category first,
- * then background-generates for other categories.
+ * Generates category thumbnails first (they appear in the sidebar immediately),
+ * then generates thumbnails for the currently selected category's transformations,
+ * then background-generates for other categories' transformations.
  * Caches results so switching categories is instant.
  * Resets cache when categories are fully replaced (e.g., LLM refresh).
  * Appends subject context (skin tone, age) to prompts for visual matching.
@@ -14,6 +15,8 @@ import {
   generateThumbnailBatch,
   buildSubjectContext,
   getTransformationThumbnailPrompt,
+  getCategoryThumbnailPrompt,
+  getCategoryThumbnailId,
 } from '@/services/thumbnailService';
 
 interface UseThumbnailsOptions {
@@ -27,7 +30,7 @@ interface UseThumbnailsOptions {
 }
 
 export interface UseThumbnailsReturn {
-  /** Map of transformationId -> thumbnail image URL */
+  /** Map of transformationId (or category thumbnail ID) -> thumbnail image URL */
   thumbnailUrls: Map<string, string>;
   /** Serializable snapshot of all cached URLs for session persistence */
   cacheSnapshot: () => Record<string, string>;
@@ -88,7 +91,9 @@ export function useThumbnails({
     // Detect full category replacement
     if (prevKeyRef.current !== categoriesKey) {
       const currentIds = new Set(categories.flatMap((c) => c.transformations.map((t) => t.id)));
-      const anyOverlap = [...queuedIdsRef.current].some((id) => currentIds.has(id));
+      const currentCatIds = new Set(categories.map((c) => getCategoryThumbnailId(c.name)));
+      const allCurrentIds = new Set([...currentIds, ...currentCatIds]);
+      const anyOverlap = [...queuedIdsRef.current].some((id) => allCurrentIds.has(id));
       if (!anyOverlap && queuedIdsRef.current.size > 0) {
         queuedIdsRef.current = new Set();
         setThumbnailUrls(new Map());
@@ -100,6 +105,14 @@ export function useThumbnails({
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+
+    // Build category thumbnail items (highest priority — visible in sidebar immediately)
+    const categoryItems = categories
+      .map((c) => {
+        const id = getCategoryThumbnailId(c.name);
+        return { id, prompt: getCategoryThumbnailPrompt(c, subjectContext) };
+      })
+      .filter((item) => !queuedIdsRef.current.has(item.id));
 
     // Build transformation items, prioritizing the selected category
     const selectedCat = categories.find((c) => c.name === selectedCategory);
@@ -121,7 +134,7 @@ export function useThumbnails({
       }));
 
     // Mark all as queued
-    const allItems = [...priorityItems, ...backgroundItems];
+    const allItems = [...categoryItems, ...priorityItems, ...backgroundItems];
     for (const item of allItems) {
       queuedIdsRef.current.add(item.id);
     }
@@ -129,8 +142,12 @@ export function useThumbnails({
     if (allItems.length === 0) return;
 
     (async () => {
-      // Generate selected category transformations first
-      if (priorityItems.length > 0) {
+      // Generate category thumbnails first (sidebar icons)
+      if (categoryItems.length > 0) {
+        await generateThumbnailBatch(categoryItems, sogniClient, handleResult, controller.signal);
+      }
+      // Then selected category transformations
+      if (priorityItems.length > 0 && !controller.signal.aborted) {
         await generateThumbnailBatch(priorityItems, sogniClient, handleResult, controller.signal);
       }
       // Then background transformations

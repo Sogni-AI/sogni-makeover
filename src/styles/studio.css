@@ -3,7 +3,7 @@
 /* Studio main grid layout */
 .studio-layout {
   display: grid;
-  grid-template-columns: 84px 1fr;
+  grid-template-columns: 110px 1fr;
   grid-template-rows: 1fr;
   gap: 0;
   flex: 1;
@@ -287,16 +287,22 @@
 .studio-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 12px 6px;
+  gap: 6px;
+  padding: 10px 8px;
   border-right: 1px solid rgba(212, 163, 115, 0.06);
   background: rgba(12, 10, 9, 0.6);
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.studio-sidebar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (max-width: 767px) {
   .studio-sidebar {
     flex-direction: row;
+    gap: 8px;
     border-right: none;
     border-bottom: 1px solid rgba(212, 163, 115, 0.06);
     overflow-x: auto;
@@ -308,6 +314,11 @@
 
   .studio-sidebar::-webkit-scrollbar {
     display: none;
+  }
+
+  .category-card {
+    flex-shrink: 0;
+    width: 80px;
   }
 }
 
@@ -425,11 +436,55 @@
   cursor: not-allowed;
 }
 
+/* Category card (sidebar tile — matches transformation-card treatment) */
+.category-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 5px 7px;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 163, 115, 0.06);
+  background: rgba(28, 25, 23, 0.4);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  width: 100%;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.category-card:hover {
+  background: rgba(212, 163, 115, 0.06);
+  border-color: rgba(212, 163, 115, 0.2);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.category-card.active {
+  background: rgba(212, 163, 115, 0.1);
+  border-color: rgba(212, 163, 115, 0.35);
+  box-shadow: 0 0 24px rgba(212, 163, 115, 0.08), inset 0 1px 0 rgba(212, 163, 115, 0.1);
+  color: rgba(212, 163, 115, 0.9);
+}
+
+.category-card-label {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+  .category-card-label {
+    font-size: 11px;
+  }
+}
+
 /* Category thumbnail */
 .category-thumbnail-container {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -437,33 +492,19 @@
   flex-shrink: 0;
 }
 
-@media (min-width: 768px) {
-  .category-thumbnail-container {
-    width: 36px;
-    height: 36px;
-  }
-}
-
 .category-thumbnail-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 10px;
   animation: thumbnailFadeIn 0.3s ease-out;
 }
 
 .category-thumbnail-placeholder {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
-}
-
-@media (min-width: 768px) {
-  .category-thumbnail-placeholder {
-    width: 36px;
-    height: 36px;
-  }
 }
 
 /* Thumbnail container */
@@ -861,7 +902,7 @@
 
 .fullscreen-carousel-dots {
   position: absolute;
-  bottom: 52px;
+  bottom: 100px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -892,17 +933,69 @@
 
 /* ── Label ─────────────────────────────────────────────────────────────────── */
 
-.fullscreen-carousel-label {
+.fullscreen-carousel-bottom {
   position: absolute;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.fullscreen-carousel-label {
   display: flex;
   align-items: center;
   font-size: 12px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.6);
   white-space: nowrap;
+}
+
+.fullscreen-carousel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 163, 115, 0.1);
+  background: rgba(12, 10, 9, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.fullscreen-carousel-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.fullscreen-carousel-action-btn:active {
+  background: rgba(212, 163, 115, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.fullscreen-carousel-action-btn:disabled {
+  color: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+
+.fullscreen-carousel-action-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(212, 163, 115, 0.1);
 }
 
 /* ── Mobile expand button (top-right of carousel) ──────────────────────────── */

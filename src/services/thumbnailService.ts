@@ -5,7 +5,7 @@
  * z_image_turbo_bf16 at 6 steps / 512x512 for fast text-to-image previews.
  */
 import { THUMBNAIL_CONFIG } from '@/constants/settings';
-import type { GeneratedTransformation, PhotoAnalysis } from '@/types/chat';
+import type { GeneratedCategory, GeneratedTransformation, PhotoAnalysis } from '@/types/chat';
 import { generateImage } from '@/services/api';
 
 export interface ThumbnailResult {
@@ -38,6 +38,31 @@ export function buildSubjectContext(photoAnalysis: PhotoAnalysis | null): string
 function buildFallbackTransformationPrompt(transformation: GeneratedTransformation, subjectContext: string): string {
   const subject = subjectContext ? `a person with ${subjectContext}` : 'a person';
   return `A close-up beauty shot of ${subject} featuring ${transformation.name}, realistic photograph, sharp focus on subject, clean detailed image, soft diffused studio portrait lighting with subtle rim light, plain neutral studio background, simple uncluttered composition, correct human anatomy, no text, no watermark, no logos, no UI elements`;
+}
+
+/**
+ * Get the thumbnail prompt for a category, appending subject context
+ * if it's not already embedded by the LLM.
+ */
+export function getCategoryThumbnailPrompt(
+  category: GeneratedCategory,
+  subjectContext: string,
+): string {
+  if (category.thumbnailPrompt) {
+    return subjectContext
+      ? `${category.thumbnailPrompt}, ${subjectContext}`
+      : category.thumbnailPrompt;
+  }
+  // Fallback: generate a generic category preview prompt
+  const subject = subjectContext ? `a person with ${subjectContext}` : 'a person';
+  return `A close-up beauty shot of ${subject} showcasing ${category.name}, realistic photograph, sharp focus on subject, clean detailed image, soft diffused studio portrait lighting with subtle rim light, plain neutral gray studio background, simple uncluttered composition, correct human anatomy, no text, no watermark, no logos, no UI elements`;
+}
+
+/**
+ * Build a stable ID for a category thumbnail (used as cache key).
+ */
+export function getCategoryThumbnailId(categoryName: string): string {
+  return `cat-${categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
 
 /**

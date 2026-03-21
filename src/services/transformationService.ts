@@ -23,6 +23,7 @@ function buildGenerationPrompt(
   const baseRules = `Rules:
 - REALISM FIRST: All options should be professional, realistic makeover transformations — the kind a real salon, stylist, or makeover show would offer. Think real hair colors, real makeup techniques, real fashion. Avoid fantastical, costume-like, or sci-fi options (e.g. no "galaxy hair", "fairy wings", "cyberpunk visor", "alien glow") UNLESS the client explicitly asks for creative, fantasy, or out-there looks.
 - INTENT-FOCUSED CATEGORIES: When the client asks for something specific (e.g. "change my hairstyle", "new makeup looks", "show me outfits"), ALL or most categories should be sub-categories within that area. For example, if they say "change my hairstyle", generate categories like "Short & Cropped", "Long & Flowing", "Updos & Braids", "Curls & Waves", "Retro & Vintage Styles", "Edgy & Bold Cuts" — all focused on hairstyles. Only include 1-2 adjacent categories if they naturally complement the request. When the intent is broad or general, THEN use a diverse spread.
+- Category names MUST be 3 words or fewer (e.g. "Hair Color", "Bold Makeup", "Skin & Glow"). Never use long names like "Retro & Vintage Styles" — shorten to "Retro Styles".
 - You MUST generate at least 6 categories with at least 6 transformation options each. More is better — aim for 8+ categories when the client's request allows it.
 - NEVER return fewer than 4 categories. A single "Quick Looks" category with 2 options is unacceptable.
 - For broad/general intents, good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
@@ -83,6 +84,12 @@ Return JSON:
 ${baseRules}`;
 }
 
+/** Truncate a category name to at most 3 words. */
+function truncateCategoryName(name: string): string {
+  const words = name.trim().split(/\s+/);
+  return words.length <= 3 ? name.trim() : words.slice(0, 3).join(' ');
+}
+
 function parseGenerationResult(content: string): { categories: GeneratedCategory[]; recommendedCategory: string } {
   let cleaned = content.trim();
   const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -96,7 +103,7 @@ function parseGenerationResult(content: string): { categories: GeneratedCategory
   }
 
   const mappedCategories = categories.map((cat: Record<string, unknown>) => ({
-    name: String(cat.name || 'Looks'),
+    name: truncateCategoryName(String(cat.name || 'Looks')),
     icon: String(cat.icon || '✨'),
     thumbnailPrompt: cat.thumbnailPrompt ? String(cat.thumbnailPrompt) : undefined,
     transformations: (Array.isArray(cat.transformations) ? cat.transformations : []).map(
@@ -382,7 +389,7 @@ They want: ${intent}${modeInstructions}
 Return ONLY category shells — no transformation options. Return JSON:
 {
   "categories": [
-    { "name": "Hair Color", "icon": "🎨", "description": "Rich colors and highlights tailored to your warm skin tone" }
+    { "name": "Hair Color", "icon": "🎨", "description": "Rich colors and highlights tailored to your warm skin tone", "thumbnailPrompt": "A close-up portrait shot of flowing styled hair on a ${photoAnalysis.features.skinTone || 'medium'} skin tone ${photoAnalysis.estimatedAgeRange || 'adult'}, rich natural hair texture with subtle highlights catching the light, soft diffused studio portrait lighting with gentle rim light from behind, warm inviting mood, plain neutral gray studio background, realistic photograph, sharp focus on subject, clean detailed image, correct human anatomy, no text, no watermark, no logos, no UI elements, simple uncluttered background" }
   ],
   "recommendedCategory": "Hair Color"
 }
@@ -395,10 +402,12 @@ Rules:
 - NEVER return fewer than 4 categories.
 - For broad/general intents, good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
 ${genderNote}
+- Category names MUST be 3 words or fewer (e.g. "Hair Color", "Bold Makeup", "Skin & Glow"). Never use long names like "Retro & Vintage Styles" — shorten to "Retro Styles".
 - Each description should be a brief one-liner (under 15 words) that explains what the category offers, personalized to the client
 - Include an emoji icon for each category
 - Return a \`recommendedCategory\` field with the name of the category you're most excited about for this client right now
-- Do NOT include transformation options — only category name, icon, and description`;
+- Include a \`thumbnailPrompt\` for each category: a DETAILED text-to-image prompt (80-150 words) for a 512x512 preview image that captures the category's essence. Frame as a tight close-up of the SPECIFIC feature area. Match the client's skin tone ("${photoAnalysis.features.skinTone || 'medium'} skin tone") and age ("${photoAnalysis.estimatedAgeRange || 'adult'}"). Use this structure: [Shot type & subject] + [Specific details of the look] + [Lighting] + [Background] + [Style]. Always include: "realistic photograph, sharp focus on subject, clean detailed image, correct human anatomy, no text, no watermark, no logos, no UI elements, simple uncluttered background". NEVER use words like "various", "multiple", "collection", "grid", or "swatches" — always depict ONE subject or ONE item.
+- Do NOT include transformation options — only category name, icon, description, and thumbnailPrompt`;
 }
 
 function parseCategoryShellResult(content: string): { categories: GeneratedCategory[]; recommendedCategory: string } {
@@ -414,9 +423,10 @@ function parseCategoryShellResult(content: string): { categories: GeneratedCateg
   }
 
   const mappedCategories: GeneratedCategory[] = categories.map((cat: Record<string, unknown>) => ({
-    name: String(cat.name || 'Looks'),
+    name: truncateCategoryName(String(cat.name || 'Looks')),
     icon: String(cat.icon || '✨'),
     description: cat.description ? String(cat.description) : undefined,
+    thumbnailPrompt: cat.thumbnailPrompt ? String(cat.thumbnailPrompt) : undefined,
     transformations: [],
     populated: false,
   }));

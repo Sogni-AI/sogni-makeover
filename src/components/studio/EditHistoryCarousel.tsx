@@ -499,7 +499,6 @@ function EditHistoryCarousel() {
         canUndo={canUndo}
         canRedo={canRedo}
         onFullscreenCompare={() => setShowFullscreen(true)}
-        stepCount={editStack.stepCount}
       />
     </div>
   );
