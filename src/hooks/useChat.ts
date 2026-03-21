@@ -458,8 +458,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             if (toolCall.name === 'generate_transformations') {
               handleTransformationResult(result);
             }
-            // Analysis tool ran inline — the pending notification is now redundant
-            if (toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') {
+            // Analysis tool ran inline — the pending notification is now redundant.
+            // But in auto-pilot mode, pendingAnalysisRef drives the continuation loop,
+            // so only clear it when auto-pilot is off.
+            if ((toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') && !isAutoPilotRef.current) {
               pendingAnalysisRef.current = null;
             }
           },
@@ -914,8 +916,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               setIsAutoPilot(false);
               autoPilotIterationsRef.current = 0;
             }
-            // Analysis tool ran inline — the pending notification is now redundant
-            if (toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') {
+            // Analysis tool ran inline — the pending notification is now redundant.
+            // But in auto-pilot mode, pendingAnalysisRef drives the continuation loop,
+            // so only clear it when auto-pilot is off.
+            if ((toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') && !isAutoPilotRef.current) {
               pendingAnalysisRef.current = null;
             }
           },
@@ -1206,10 +1210,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               setIsAutoPilot(false);
               autoPilotIterationsRef.current = 0;
             }
-            // Analysis tool ran inline — the pending notification is now redundant
-            if (toolCall.name === 'compare_before_after' || toolCall.name === 'analyze_result') {
-              pendingAnalysisRef.current = null;
-            }
+            // Analysis tool ran inline — the pending notification is now redundant.
+            // In auto-pilot mode, pendingAnalysisRef drives the continuation loop,
+            // so never clear it here (auto-pilot is always active in kickOffAutoPilot).
           },
           onComplete: (finalHistory) => {
             deferUntilDrained(() => {
