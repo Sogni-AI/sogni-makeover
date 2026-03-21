@@ -22,9 +22,10 @@ function buildGenerationPrompt(
 
   const baseRules = `Rules:
 - REALISM FIRST: All options should be professional, realistic makeover transformations — the kind a real salon, stylist, or makeover show would offer. Think real hair colors, real makeup techniques, real fashion. Avoid fantastical, costume-like, or sci-fi options (e.g. no "galaxy hair", "fairy wings", "cyberpunk visor", "alien glow") UNLESS the client explicitly asks for creative, fantasy, or out-there looks.
+- INTENT-FOCUSED CATEGORIES: When the client asks for something specific (e.g. "change my hairstyle", "new makeup looks", "show me outfits"), ALL or most categories should be sub-categories within that area. For example, if they say "change my hairstyle", generate categories like "Short & Cropped", "Long & Flowing", "Updos & Braids", "Curls & Waves", "Retro & Vintage Styles", "Edgy & Bold Cuts" — all focused on hairstyles. Only include 1-2 adjacent categories if they naturally complement the request. When the intent is broad or general, THEN use a diverse spread.
 - You MUST generate at least 6 categories with at least 6 transformation options each. More is better — aim for 8+ categories when the client's request allows it.
 - NEVER return fewer than 4 categories. A single "Quick Looks" category with 2 options is unacceptable.
-- Good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
+- For broad/general intents, good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
 ${genderNote}
 - Write prompts with the actual subject description baked in (not generic "the person")
 - Set intensity (denoising strength) appropriate to how dramatic the change is: subtle 0.5-0.6, moderate 0.6-0.75, dramatic 0.75-0.95
@@ -388,9 +389,11 @@ Return ONLY category shells — no transformation options. Return JSON:
 
 Rules:
 - REALISM FIRST: Categories should reflect professional, realistic makeover options — the kind a real salon or stylist would offer. Avoid fantastical or costume-like categories (e.g. no "Fairy Tale Looks", "Sci-Fi Vibes", "Mythical Creatures") UNLESS the client explicitly asks for creative or fantasy options.
+- INTENT-FOCUSED CATEGORIES: When the client asks for something specific (e.g. "change my hairstyle", "new makeup looks", "show me outfits"), ALL or most categories should be sub-categories within that area. For example, if they say "change my hairstyle", generate categories like "Short & Cropped", "Long & Flowing", "Updos & Braids", "Curls & Waves", "Retro & Vintage Styles", "Edgy & Bold Cuts", etc. — all focused on hairstyles. Do NOT fall back to broad categories like "Hair Color, Makeup, Outfit, Accessories" when the client has a specific focus. The intent IS the category — break it into meaningful sub-categories. Only include 1-2 adjacent categories if they naturally complement the request (e.g., "Hair Color" alongside hairstyle categories).
+- When the intent is broad or general (e.g. "show me everything", "full makeover", "what do you think?"), THEN use a diverse spread of categories across different areas.
 - Generate up to 8 categories. Aim for 6-8 when the client's request allows it.
 - NEVER return fewer than 4 categories.
-- Good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
+- For broad/general intents, good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
 ${genderNote}
 - Each description should be a brief one-liner (under 15 words) that explains what the category offers, personalized to the client
 - Include an emoji icon for each category
