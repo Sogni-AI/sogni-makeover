@@ -222,6 +222,7 @@ export function AppProvider({ children }: AppProviderProps) {
   // Ref to capture the last generation result synchronously (for generateFromPrompt).
   // React state updates are async, so we can't read currentResult right after generateMakeover.
   const lastGenerationResultRef = useRef<{ resultUrl: string; projectId: string } | null>(null);
+  const generationRetryCountRef = useRef(0);
 
   editStackInputRef.current = {
     mode: editStack.mode,
@@ -603,6 +604,8 @@ export function AppProvider({ children }: AppProviderProps) {
         message: 'Uploading image...',
       });
 
+      let sdkErrorMessage = '';
+
       try {
         // ---------------------------------------------------------------
         // Path A: Frontend SDK (authenticated user with initialized client)
@@ -693,12 +696,8 @@ export function AppProvider({ children }: AppProviderProps) {
             } else if (error && typeof error === 'object' && typeof error.message === 'string') {
               msg = error.message;
             }
-            setGenerationProgress({
-              projectId,
-              status: 'error',
-              progress: 0,
-              message: msg,
-            });
+            // Store for catch block — error state is set centrally there
+            sdkErrorMessage = msg;
           };
 
           // Register listeners
@@ -741,6 +740,7 @@ export function AppProvider({ children }: AppProviderProps) {
           // Write to ref synchronously so generateFromPrompt can read it
           lastGenerationResultRef.current = { resultUrl: resultImageUrl, projectId };
 
+          generationRetryCountRef.current = 0;
           setCurrentResult(result);
           setGenerationProgress({
             projectId,
@@ -961,6 +961,7 @@ export function AppProvider({ children }: AppProviderProps) {
                 // Write to ref synchronously so generateFromPrompt can read it
                 lastGenerationResultRef.current = { resultUrl: result.imageUrl, projectId };
 
+                generationRetryCountRef.current = 0;
                 setCurrentResult(result);
                 setGenerationProgress({
                   projectId,
@@ -1052,24 +1053,45 @@ export function AppProvider({ children }: AppProviderProps) {
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           // User cancelled - already handled
+          generationRetryCountRef.current = 0;
+          abortControllerRef.current = null;
           return;
         }
 
-        let errorMessage = 'An unexpected error occurred';
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        } else if (err && typeof err === 'object' && 'message' in err && typeof (err as Record<string, unknown>).message === 'string') {
-          errorMessage = (err as Record<string, string>).message;
-        } else if (typeof err === 'string') {
-          errorMessage = err;
+        // Use SDK error event message if available, otherwise extract from caught error
+        let errorMessage = sdkErrorMessage || 'An unexpected error occurred';
+        if (!sdkErrorMessage) {
+          if (err instanceof Error) {
+            errorMessage = err.message;
+          } else if (err && typeof err === 'object' && 'message' in err && typeof (err as Record<string, unknown>).message === 'string') {
+            errorMessage = (err as Record<string, string>).message;
+          } else if (typeof err === 'string') {
+            errorMessage = err;
+          }
         }
+
+        // Auto-retry for transient image processing errors (e.g. corrupted download on worker)
+        const MAX_IMAGE_RETRIES = 1;
+        if (/cannot identify image file/i.test(errorMessage) && generationRetryCountRef.current < MAX_IMAGE_RETRIES) {
+          generationRetryCountRef.current++;
+          setGenerationProgress({
+            projectId: '',
+            status: 'uploading',
+            progress: 0,
+            message: 'Image processing error, retrying...',
+          });
+          abortControllerRef.current = null;
+          await new Promise(r => setTimeout(r, 1500));
+          return generateMakeover(transformation);
+        }
+
+        generationRetryCountRef.current = 0;
         setGenerationProgress({
           projectId: '',
           status: 'error',
           progress: 0,
           message: errorMessage,
         });
-      } finally {
         abortControllerRef.current = null;
       }
     },

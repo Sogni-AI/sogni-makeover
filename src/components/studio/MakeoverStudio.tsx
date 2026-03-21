@@ -163,18 +163,25 @@ function MakeoverStudio() {
     }
   }, [generatedCategories.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Trigger auto-analysis when generation completes
+  // Trigger auto-analysis when generation completes (or notify chat on error)
   const prevGeneratingRef = useRef(false);
   useEffect(() => {
     const wasGenerating = prevGeneratingRef.current;
     prevGeneratingRef.current = isGenerating;
 
-    if (wasGenerating && !isGenerating && editStack.currentStep) {
-      const step = editStack.currentStep;
-      chat.notifyGenerationComplete(
-        { name: step.transformation.name, prompt: step.transformation.prompt },
-        step.resultImageUrl
-      );
+    if (wasGenerating && !isGenerating) {
+      if (generationProgress?.status === 'completed' && editStack.currentStep) {
+        const step = editStack.currentStep;
+        chat.notifyGenerationComplete(
+          { name: step.transformation.name, prompt: step.transformation.prompt },
+          step.resultImageUrl
+        );
+      } else if (generationProgress?.status === 'error' && currentTransformation) {
+        chat.notifyGenerationError(
+          currentTransformation.name,
+          generationProgress.message || 'An unknown error occurred'
+        );
+      }
     }
   }, [isGenerating]); // eslint-disable-line react-hooks/exhaustive-deps
 

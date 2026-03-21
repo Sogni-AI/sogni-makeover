@@ -798,6 +798,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     // Prevent re-triggering if a generation happens during analysis (e.g. LLM calls generate_makeover)
     if (isAutoAnalyzingRef.current) return;
 
+    // When auto-pilot is on, pause 5 seconds so the user can read the chat before the next layer
+    if (isAutoPilotRef.current) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Bail if auto-pilot was disabled or state changed during the wait
+      if (!isAutoPilotRef.current || isStreamingRef.current || isAutoAnalyzingRef.current) return;
+    }
+
     // Track auto-pilot iterations — stop if limit reached
     let autoPilotActive = isAutoPilot;
     let autoPilotJustCompleted = false;
