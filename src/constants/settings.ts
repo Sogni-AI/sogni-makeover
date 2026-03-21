@@ -101,7 +101,7 @@ export const THUMBNAIL_CONFIG = {
   sampler: 'euler',
   scheduler: 'simple',
   outputFormat: 'jpg',
-  maxConcurrent: 3,
+  maxConcurrent: 8,
 };
 
 export const SSE_CONFIG = {
