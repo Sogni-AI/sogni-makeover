@@ -35,7 +35,7 @@ async function handler(
   try {
     const analysis = await context.analyzeImage(
       imageUrl,
-      'You are an eccentric Hollywood stylist reviewing a makeover result. Describe how the transformation looks — what works well, what could be refined. Be specific and enthusiastic. Suggest 2-3 follow-up ideas. Keep it brief and fun.'
+      'You are an eccentric Hollywood stylist reviewing a makeover result. In 2-3 sentences max: what works, what could be refined, and one follow-up idea. Be specific and enthusiastic.'
     );
     return { success: true, data: { analysis } };
   } catch (error) {

@@ -32,13 +32,9 @@ async function handler(
     const comparison = await context.analyzeImage(
       step.resultImageUrl,
       `You are an eccentric Hollywood stylist comparing a before and after makeover.
-The original image shows: ${context.getPhotoAnalysis().subjectDescription}.
-The transformation prompt was: "${step.transformation.prompt}".
-Compare what was requested vs what was delivered. Be specific about:
-1. What changed successfully
-2. Anything that didn't quite match the request
-3. Overall quality and naturalness of the result
-Be enthusiastic but honest. Keep it to 2-3 sentences.`
+The original: ${context.getPhotoAnalysis().subjectDescription}.
+The prompt was: "${step.transformation.prompt}".
+In 2 sentences max: what landed vs what missed, and overall quality. Be enthusiastic but honest.`
     );
     return { success: true, data: { comparison } };
   } catch (error) {
