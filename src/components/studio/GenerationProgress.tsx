@@ -54,9 +54,9 @@ function GenerationProgress({ progress, onCancel, onDismiss, transformationName 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="absolute inset-x-0 bottom-0 z-10 p-4"
+        className="absolute inset-x-0 bottom-0 z-10 p-2 md:p-4"
       >
-        <div className="mx-auto max-w-md rounded-xl border border-primary-400/[0.08] bg-surface-900/80 px-4 py-3 shadow-2xl backdrop-blur-md">
+        <div className="mx-auto max-w-md rounded-xl border border-primary-400/[0.08] bg-surface-900/80 px-3 py-2 shadow-2xl backdrop-blur-md md:px-4 md:py-3">
           {/* Status + progress */}
           <div className="flex items-center gap-3">
             {/* Spinner or status icon */}
@@ -82,10 +82,10 @@ function GenerationProgress({ progress, onCancel, onDismiss, transformationName 
                   <span className="truncate text-xs text-white/35">{transformationName}</span>
                 )}
               </div>
-              <div className="mt-1.5">
+              <div className="mt-1 md:mt-1.5">
                 <ProgressBar
                   progress={progress.progress}
-                  message={progress.message}
+                  message={isTerminal ? progress.message : undefined}
                   showPercentage
                 />
               </div>

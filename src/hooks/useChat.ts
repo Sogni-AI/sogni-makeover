@@ -11,6 +11,7 @@ import type {
 import type { EditStep } from '@/types';
 import { sendChatMessage, type AutoPilotConfig } from '@/services/chatService';
 import { analyzePhotoSubject, FALLBACK_ANALYSIS } from '@/services/photoAnalysisService';
+import { generateCategoryOptions } from '@/services/transformationService';
 import { getURLs } from '@/config/urls';
 
 interface UseChatOptions {
@@ -588,7 +589,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               );
               if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
               setIsStreaming(false);
-              setTimeout(() => drainPendingPopulateCategory(), 0);
+              // Don't auto-populate during init — let the user interact with
+              // the greeting and suggestion chips first. Categories will
+              // populate on demand when the user clicks one.
+              pendingPopulateCategoryRef.current = null;
             });
           },
           onError: () => {
@@ -616,10 +620,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } finally {
       if (!pendingCompletionRef.current) {
         setIsStreaming(false);
-        setTimeout(() => drainPendingPopulateCategory(), 0);
+        pendingPopulateCategoryRef.current = null;
       }
     }
-  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, deferUntilDrained, handleTransformationResult, drainPendingPopulateCategory]);
+  }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, deferUntilDrained, handleTransformationResult]);
 
   const restoreSession = useCallback(async (data: {
     messages: ChatMessage[];
@@ -1087,6 +1091,24 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
               if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
               streamingLockRef.current = false;
               setIsStreaming(false);
+
+              // Fallback: if the LLM didn't call the tool, populate directly
+              const catAfter = generatedCategoriesRef.current.find((c) => c.name === categoryName);
+              if (catAfter && !catAfter.populated) {
+                const catDesc = catAfter.description || categoryName;
+                generateCategoryOptions(photoAnalysisRef.current, categoryName, catDesc, sogniClient)
+                  .then((transformations) => {
+                    handleTransformationResult({
+                      success: true,
+                      data: { categoryName, transformations, phase: 'options' },
+                    });
+                  })
+                  .catch(() => {
+                    setGeneratedCategories((prev) =>
+                      prev.map((c) => c.name === categoryName ? { ...c, isPopulating: false } : c)
+                    );
+                  });
+              }
             });
           },
           onError: () => {

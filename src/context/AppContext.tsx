@@ -462,10 +462,7 @@ export function AppProvider({ children }: AppProviderProps) {
       abortControllerRef.current = null;
     }
 
-    setGenerationProgress((prev) => {
-      if (!prev) return null;
-      return { ...prev, status: 'cancelled', message: 'Generation cancelled' };
-    });
+    setGenerationProgress(null);
   }, []);
 
   /**

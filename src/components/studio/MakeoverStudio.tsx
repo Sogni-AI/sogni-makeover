@@ -299,7 +299,7 @@ function MakeoverStudio() {
                 />
               )}
 
-              {/* Generation progress overlay (also shown for error/cancelled so user sees feedback) */}
+              {/* Generation progress overlay (also shown for error so user sees feedback) */}
               {!isEnhancing && generationProgress &&
                 generationProgress.status !== 'completed' && (
                 <GenerationProgress
