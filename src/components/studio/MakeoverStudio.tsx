@@ -318,16 +318,7 @@ function MakeoverStudio() {
                 />
               )}
 
-              {/* Generation progress overlay (also shown for error so user sees feedback) */}
-              {!isEnhancing && generationProgress &&
-                generationProgress.status !== 'completed' && (
-                <GenerationProgress
-                  progress={generationProgress}
-                  onCancel={handleCancelGeneration}
-                  onDismiss={() => setGenerationProgress(null)}
-                  transformationName={currentTransformation?.name}
-                />
-              )}
+              {/* Generation progress moved to TransformationPicker card overlay */}
             </div>
 
             {/* Transformation picker */}
@@ -424,6 +415,9 @@ function MakeoverStudio() {
                 activeTransformationId={activeTransformationId}
                 isLoading={isCategoriesLoading}
                 thumbnailUrls={thumbnailUrls}
+                generationProgress={!isEnhancing ? generationProgress : null}
+                onCancelGeneration={handleCancelGeneration}
+                onDismissProgress={() => setGenerationProgress(null)}
               />
             </div>
           </div>

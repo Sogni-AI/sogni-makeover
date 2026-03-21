@@ -43,17 +43,7 @@ function Header({ onPurchaseClick, onLoginClick, onSignupClick }: HeaderProps) {
 
         <nav className="flex items-center gap-3">
           {currentView !== 'landing' && (
-            <>
-              <motion.button
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                onClick={() => setCurrentView('landing')}
-                className="text-sm text-white/40 transition-colors hover:text-primary-300"
-              >
-                Home
-              </motion.button>
-              <QualityTierSelect />
-            </>
+            <QualityTierSelect />
           )}
 
           {authState.isAuthenticated && (

@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import type { GeneratedTransformation, GeneratedCategory } from '@/types/chat';
+import type { GenerationProgress } from '@/types';
 
 interface TransformationPickerProps {
   categories: GeneratedCategory[];
@@ -11,6 +12,9 @@ interface TransformationPickerProps {
   activeTransformationId: string | null;
   isLoading: boolean;
   thumbnailUrls?: Map<string, string>;
+  generationProgress?: GenerationProgress | null;
+  onCancelGeneration?: () => void;
+  onDismissProgress?: () => void;
 }
 
 const gridContainerVariants = {
@@ -33,6 +37,9 @@ function TransformationPicker({
   activeTransformationId,
   isLoading,
   thumbnailUrls,
+  generationProgress,
+  onCancelGeneration,
+  onDismissProgress,
 }: TransformationPickerProps) {
   const category = useMemo(
     () => categories.find((c) => c.name === selectedCategory),
@@ -107,6 +114,8 @@ function TransformationPicker({
             {transformations.map((transformation) => {
               const isActive = activeTransformationId === transformation.id;
               const thumbUrl = thumbnailUrls?.get(transformation.id);
+              const isActiveGenerating = isActive && generationProgress && generationProgress.status !== 'completed';
+              const isTerminal = generationProgress?.status === 'error' || generationProgress?.status === 'cancelled';
               return (
                 <motion.button
                   key={transformation.id}
@@ -114,14 +123,22 @@ function TransformationPicker({
                   transition={{ duration: 0.2 }}
                   whileHover={isDisabled ? undefined : { scale: 1.05 }}
                   whileTap={isDisabled ? undefined : { scale: 0.95 }}
-                  onClick={() => !isDisabled && onSelectTransformation(transformation)}
+                  onClick={() => {
+                    if (isActiveGenerating && !isTerminal && onCancelGeneration) {
+                      onCancelGeneration();
+                    } else if (isActiveGenerating && isTerminal && onDismissProgress) {
+                      onDismissProgress();
+                    } else if (!isDisabled) {
+                      onSelectTransformation(transformation);
+                    }
+                  }}
                   onMouseEnter={(e) => !isDisabled && transformation.pitch && showTooltip(e, transformation.pitch)}
                   onMouseLeave={hideTooltip}
-                  className={`transformation-card ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
-                  disabled={isDisabled}
-                  aria-label={`Apply ${transformation.name} transformation`}
+                  className={`transformation-card ${isActive ? 'active' : ''} ${isDisabled && !isActiveGenerating ? 'disabled' : ''}`}
+                  disabled={isDisabled && !isActiveGenerating}
+                  aria-label={isActiveGenerating && !isTerminal ? `Cancel ${transformation.name}` : `Apply ${transformation.name} transformation`}
                 >
-                  <div className="thumbnail-container">
+                  <div className="thumbnail-container relative">
                     {thumbUrl ? (
                       <img
                         src={thumbUrl}
@@ -134,8 +151,39 @@ function TransformationPicker({
                         <span className="text-lg">{transformation.icon}</span>
                       </div>
                     )}
+                    {/* Generation progress overlay on active card */}
+                    {isActiveGenerating && (
+                      <div className="card-progress-overlay">
+                        {!isTerminal ? (
+                          <div className="card-progress-spinner" />
+                        ) : (
+                          <svg className="h-4 w-4 text-secondary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                          </svg>
+                        )}
+                        <div className="card-progress-bar">
+                          <motion.div
+                            className="card-progress-fill"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.max(0, Math.min(100, generationProgress.progress))}%` }}
+                            transition={{ duration: 0.5, ease: 'easeOut' }}
+                          />
+                        </div>
+                        <span className="card-progress-label">
+                          {isTerminal ? 'Tap to dismiss' : `${Math.round(generationProgress.progress)}%`}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-xs font-medium leading-tight">{transformation.name}</span>
+                  <span className="text-xs font-medium leading-tight">
+                    {isActiveGenerating && !isTerminal ? (
+                      <span className="text-primary-300/70">
+                        {generationProgress.status === 'queued' ? 'Queued' : 'Generating'}
+                      </span>
+                    ) : (
+                      transformation.name
+                    )}
+                  </span>
                 </motion.button>
               );
             })}
@@ -143,7 +191,9 @@ function TransformationPicker({
         ) : (
           <div className="flex items-center justify-center p-12">
             <p className="text-sm text-white/25">
-              Tell your stylist what you&apos;re looking for to see personalized options.
+              {categories.length > 0
+                ? 'Tap on a category to get started or tell your stylist what you\u2019re looking for to see more options.'
+                : 'Tell your stylist what you\u2019re looking for to see personalized options.'}
             </p>
           </div>
         )}
