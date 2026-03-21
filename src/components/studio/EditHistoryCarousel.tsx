@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import FullscreenComparison from '@/components/studio/FullscreenComparison';
+import FullscreenCarousel from '@/components/studio/FullscreenCarousel';
 
 // ── Coverflow positioning math ──────────────────────────────────────────────
 
@@ -71,8 +72,24 @@ function EditHistoryCarousel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 450 });
   const [showFullscreen, setShowFullscreen] = useState(false);
+  const [showActionBar, setShowActionBar] = useState(true);
+  const [isMobilePortrait, setIsMobilePortrait] = useState(false);
 
   const { steps, currentIndex, canUndo, canRedo, goToStep, undo, redo, mode } = editStack;
+
+  // ── Detect mobile portrait ──────────────────────────────────────────────
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px) and (orientation: portrait)');
+    setIsMobilePortrait(mq.matches);
+    setShowActionBar(!mq.matches);
+    const handler = (e: MediaQueryListEvent) => {
+      setIsMobilePortrait(e.matches);
+      setShowActionBar(!e.matches);
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // ── Measure container ─────────────────────────────────────────────────────
 
@@ -242,6 +259,7 @@ function EditHistoryCarousel() {
       className="coverflow-viewport"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onClick={() => { if (isMobilePortrait && showActionBar) setShowActionBar(false); }}
     >
       {/* ── Coverflow cards ──────────────────────────────────── */}
       <AnimatePresence initial={false}>
@@ -276,7 +294,16 @@ function EditHistoryCarousel() {
                 opacity: opacityTween,
                 filter: { type: 'tween', duration: 0.28, ease: 'easeOut' },
               }}
-              onClick={() => !isActive && goToStep(item.stepIndex)}
+              onClick={(e) => {
+                if (isActive) {
+                  if (isMobilePortrait) {
+                    e.stopPropagation();
+                    setShowActionBar(prev => !prev);
+                  }
+                } else {
+                  goToStep(item.stepIndex);
+                }
+              }}
               whileHover={!isActive ? {
                 scale: s.scale * 1.07,
                 opacity: Math.min(1, s.opacity + 0.14),
@@ -349,8 +376,11 @@ function EditHistoryCarousel() {
       )}
 
       {/* ── Action bar (viewing a result) ────────────────────── */}
-      {currentIndex >= 0 && (
-        <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-primary-400/10 bg-surface-900/80 px-2 pb-1.5 pt-1 shadow-xl backdrop-blur-md">
+      {currentIndex >= 0 && (!isMobilePortrait || showActionBar) && (
+        <div
+          className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-primary-400/10 bg-surface-900/80 px-2 pb-1.5 pt-1 shadow-xl backdrop-blur-md"
+          onClick={(e) => e.stopPropagation()}
+        >
           {steps[currentIndex]?.transformation && (
             <>
               <span className="relative text-[11px] font-medium text-primary-300/80">

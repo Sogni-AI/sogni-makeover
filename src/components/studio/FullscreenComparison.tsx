@@ -134,9 +134,12 @@ function FullscreenComparison({
             exit="exit"
           >
             {transformationName && (
-              <span className="text-[11px] font-medium text-white/50">
-                {transformationName}
-              </span>
+              <>
+                <span className="text-[11px] font-medium text-primary-300/80">
+                  {transformationName}
+                </span>
+                <div className="h-px w-full bg-primary-400/10" />
+              </>
             )}
             <div className="flex items-center gap-1.5">
               <button

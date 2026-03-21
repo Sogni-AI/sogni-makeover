@@ -762,10 +762,11 @@
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 6px 8px;
-  border-radius: 9999px;
+  gap: 4px;
+  padding: 4px 8px 6px;
+  border-radius: 16px;
   border: 1px solid rgba(212, 163, 115, 0.10);
   background: rgba(12, 10, 9, 0.85);
   backdrop-filter: blur(16px);
@@ -818,4 +819,116 @@
     width: 32px;
     height: 32px;
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fullscreen Carousel Overlay                                                 */
+/* -------------------------------------------------------------------------- */
+
+.fullscreen-carousel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 4, 3, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.fullscreen-carousel-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px 80px;
+  overflow: hidden;
+}
+
+.fullscreen-carousel-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* ── Dot indicators ────────────────────────────────────────────────────────── */
+
+.fullscreen-carousel-dots {
+  position: absolute;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  background: rgba(12, 10, 9, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.fullscreen-carousel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.fullscreen-carousel-dot--active {
+  background: rgba(212, 163, 115, 0.9);
+  box-shadow: 0 0 6px rgba(212, 163, 115, 0.4);
+  transform: scale(1.25);
+}
+
+/* ── Label ─────────────────────────────────────────────────────────────────── */
+
+.fullscreen-carousel-label {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+
+/* ── Mobile expand button (top-right of carousel) ──────────────────────────── */
+
+.coverflow-expand-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 10, 9, 0.6);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.coverflow-expand-btn:active {
+  background: rgba(212, 163, 115, 0.15);
+  border-color: rgba(212, 163, 115, 0.3);
+  color: rgba(255, 255, 255, 0.95);
 }

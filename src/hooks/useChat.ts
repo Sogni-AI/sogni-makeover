@@ -1357,6 +1357,7 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
 
   const disableAutoPilot = useCallback(() => {
     setIsAutoPilot(false);
+    isAutoPilotRef.current = false; // Immediately visible to in-flight operations
     if (autoPilotTimerRef.current) {
       clearTimeout(autoPilotTimerRef.current);
       autoPilotTimerRef.current = null;
@@ -1385,25 +1386,20 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
     if (!isAutoPilot && !isAuthenticated && demoGenerationsRemaining <= 0) {
       return;
     }
-    setIsAutoPilot((prev) => {
-      const next = !prev;
-      if (next) {
-        // Delay kickoff by 2 seconds to let user confirm intent
-        autoPilotTimerRef.current = setTimeout(() => {
-          autoPilotTimerRef.current = null;
-          kickOffAutoPilot();
-        }, 2000);
-      } else {
-        // Turning off — cancel pending kickoff if any
-        if (autoPilotTimerRef.current) {
-          clearTimeout(autoPilotTimerRef.current);
-          autoPilotTimerRef.current = null;
-        }
-        autoPilotIterationsRef.current = 0;
-      }
-      return next;
-    });
-  }, [kickOffAutoPilot, isAutoPilot, isAuthenticated, demoGenerationsRemaining]);
+    if (isAutoPilot) {
+      // Turning off — use full cleanup
+      disableAutoPilot();
+    } else {
+      // Turning on
+      setIsAutoPilot(true);
+      isAutoPilotRef.current = true;
+      // Delay kickoff by 2 seconds to let user confirm intent
+      autoPilotTimerRef.current = setTimeout(() => {
+        autoPilotTimerRef.current = null;
+        kickOffAutoPilot();
+      }, 2000);
+    }
+  }, [kickOffAutoPilot, disableAutoPilot, isAutoPilot, isAuthenticated, demoGenerationsRemaining]);
 
   return {
     messages,
