@@ -96,7 +96,7 @@ export const THUMBNAIL_CONFIG = {
   modelId: Z_IMAGE_TURBO_MODEL_ID,
   width: 512,
   height: 512,
-  steps: 4,
+  steps: 6,
   guidance: 1,
   sampler: 'euler',
   scheduler: 'simple',

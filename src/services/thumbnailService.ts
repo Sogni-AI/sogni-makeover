@@ -2,7 +2,7 @@
  * Thumbnail generation service
  *
  * Generates quick preview thumbnails for transformation cards using
- * z_image_turbo_bf16 at 4 steps / 512x512 for fast text-to-image previews.
+ * z_image_turbo_bf16 at 6 steps / 512x512 for fast text-to-image previews.
  */
 import { THUMBNAIL_CONFIG } from '@/constants/settings';
 import type { GeneratedTransformation, PhotoAnalysis } from '@/types/chat';
@@ -36,8 +36,8 @@ export function buildSubjectContext(photoAnalysis: PhotoAnalysis | null): string
  * the LLM didn't provide a dedicated thumbnailPrompt.
  */
 function buildFallbackTransformationPrompt(transformation: GeneratedTransformation, subjectContext: string): string {
-  const base = `${transformation.name}, professional photography, soft studio lighting, square composition`;
-  return subjectContext ? `${base}, ${subjectContext}` : base;
+  const subject = subjectContext ? `a person with ${subjectContext}` : 'a person';
+  return `A close-up beauty shot of ${subject} featuring ${transformation.name}, realistic photograph, sharp focus on subject, clean detailed image, soft diffused studio portrait lighting with subtle rim light, plain neutral studio background, simple uncluttered composition, correct human anatomy, no text, no watermark, no logos, no UI elements`;
 }
 
 /**
@@ -71,7 +71,6 @@ async function generateThumbnailViaSdk(
     type: 'image',
     modelId: THUMBNAIL_CONFIG.modelId,
     positivePrompt: prompt,
-    negativePrompt: 'deformed, ugly, blurry, text, watermark',
     width: THUMBNAIL_CONFIG.width,
     height: THUMBNAIL_CONFIG.height,
     steps: THUMBNAIL_CONFIG.steps,
@@ -144,7 +143,6 @@ async function generateThumbnailViaBackend(prompt: string): Promise<string> {
     const params = {
       modelId: THUMBNAIL_CONFIG.modelId,
       positivePrompt: prompt,
-      negativePrompt: 'deformed, ugly, blurry, text, watermark',
       width: THUMBNAIL_CONFIG.width,
       height: THUMBNAIL_CONFIG.height,
       guidance: THUMBNAIL_CONFIG.guidance,
