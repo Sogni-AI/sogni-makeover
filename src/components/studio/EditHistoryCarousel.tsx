@@ -72,6 +72,7 @@ function EditHistoryCarousel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 450 });
   const [showFullscreen, setShowFullscreen] = useState(false);
+  const [showFullscreenCarousel, setShowFullscreenCarousel] = useState(false);
   const [showActionBar, setShowActionBar] = useState(true);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
 
@@ -360,6 +361,22 @@ function EditHistoryCarousel() {
         })()}
       </AnimatePresence>
 
+      {/* ── Fullscreen expand button (mobile portrait only) ───── */}
+      {isMobilePortrait && allItems.length > 0 && (
+        <button
+          className="coverflow-expand-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowFullscreenCarousel(true);
+          }}
+          aria-label="View fullscreen gallery"
+        >
+          <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+          </svg>
+        </button>
+      )}
+
       {/* ── Mini redo pill (original photo, redo available) ──── */}
       {currentIndex === -1 && canRedo && !isGenerating && (
         <div className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
@@ -465,6 +482,20 @@ function EditHistoryCarousel() {
         transformationName={currentIndex >= 0 ? steps[currentIndex].transformation?.name : undefined}
         onDownload={handleDownload}
         onShare={handleShare}
+      />
+
+      {/* ── Fullscreen carousel overlay ────────────────────── */}
+      <FullscreenCarousel
+        isOpen={showFullscreenCarousel}
+        onClose={() => setShowFullscreenCarousel(false)}
+        items={allItems.map(item => ({
+          key: item.key,
+          stepIndex: item.stepIndex,
+          url: item.url,
+          label: item.stepIndex === -1 ? 'Original' : (item.transformation?.name ?? 'Result'),
+          icon: item.transformation?.icon,
+        }))}
+        initialIndex={activeArrayIndex}
       />
     </div>
   );
