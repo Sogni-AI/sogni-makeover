@@ -35,10 +35,7 @@ export function useAutoEnhance(): UseAutoEnhanceReturn {
       abortRef.current.abort();
       abortRef.current = null;
     }
-    setEnhanceProgress((prev) => {
-      if (!prev) return null;
-      return { ...prev, status: 'cancelled', message: 'Enhancement cancelled' };
-    });
+    setEnhanceProgress(null);
   }, []);
 
   const enhancePhoto = useCallback(
@@ -63,7 +60,7 @@ export function useAutoEnhance(): UseAutoEnhanceReturn {
         contextImages: [imageBase64],
         width: DEFAULT_SETTINGS.defaultWidth,
         height: DEFAULT_SETTINGS.defaultHeight,
-        guidance: modelDefaults.guidance,
+        guidance: AUTO_ENHANCE_CONFIG.guidance,
         steps: modelDefaults.steps,
         sampler: modelDefaults.sampler,
         scheduler: modelDefaults.scheduler,

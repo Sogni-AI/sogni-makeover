@@ -60,10 +60,11 @@ function StylistBubble({
     .reverse()
     .find((msg) => msg.role === 'assistant' && !msg.isStreaming && !msg.isToolProgress);
 
+  const isEnhanceMessage = messages.length === 1 && messages[0]?.id?.endsWith('-enhance');
   const suggestions =
     latestNonStreamingAssistant?.suggestions && latestNonStreamingAssistant.suggestions.length > 0
       ? latestNonStreamingAssistant.suggestions
-      : messages.length <= 1
+      : messages.length <= 1 && !isEnhanceMessage
         ? DEFAULT_SUGGESTIONS
         : [];
 

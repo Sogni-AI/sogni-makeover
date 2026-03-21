@@ -45,18 +45,12 @@ function CameraView() {
     try {
       stopStream();
 
-      // Request highest useful resolution — square crop so request
-      // large square; iOS swaps width/height internally so we request
-      // landscape-oriented and let the browser negotiate.
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-      const requestWidth = isIOS ? 1920 : 2048;
-      const requestHeight = isIOS ? 1080 : 2048;
-
+      // Request 2:3 portrait resolution to match app output (1024x1536)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: facing,
-          width: { ideal: requestWidth },
-          height: { ideal: requestHeight },
+          width: { ideal: 1024 },
+          height: { ideal: 1536 },
         },
         audio: false,
       });
@@ -235,14 +229,14 @@ function CameraView() {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-primary-400/10 bg-surface-950 max-h-[55dvh] sm:max-h-[60dvh]">
+      <div className="relative w-full max-w-md aspect-[2/3] max-h-[55dvh] overflow-hidden rounded-2xl border border-primary-400/10 bg-surface-950" style={{ maxWidth: 'min(28rem, calc(55dvh * 2 / 3))' }}>
         {cameraState === 'captured' && capturedImage ? (
           <motion.img
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             src={capturedImage}
             alt="Captured photo"
-            className="aspect-[2/3] w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <>
@@ -251,7 +245,7 @@ function CameraView() {
               autoPlay
               playsInline
               muted
-              className={`aspect-[2/3] w-full object-cover ${facingMode === 'user' ? 'camera-mirror' : ''}`}
+              className={`absolute inset-0 h-full w-full object-cover ${facingMode === 'user' ? 'camera-mirror' : ''}`}
             />
             {cameraState === 'requesting' && (
               <div className="absolute inset-0 flex items-center justify-center bg-surface-950">

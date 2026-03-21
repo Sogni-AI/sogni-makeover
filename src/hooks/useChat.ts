@@ -8,11 +8,13 @@ import type {
   MakeoverToolContext,
   GeneratedTransformation,
 } from '@/types/chat';
-import type { EditStep } from '@/types';
+import type { EditStep, AppSettings } from '@/types';
 import { sendChatMessage, type AutoPilotConfig } from '@/services/chatService';
 import { analyzePhotoSubject, FALLBACK_ANALYSIS } from '@/services/photoAnalysisService';
 import { generateCategoryOptions } from '@/services/transformationService';
+import { buildAutoEnhancePrompt } from '@/constants/settings';
 import { getURLs } from '@/config/urls';
+import type { AutoEnhanceResult } from '@/hooks/useAutoEnhance';
 
 interface UseChatOptions {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,6 +34,16 @@ interface UseChatOptions {
     negativePrompt?: string;
     useStackedInput?: boolean;
   }) => Promise<{ resultUrl: string; projectId: string }>;
+  settings: AppSettings;
+  enhancePhoto: (
+    imageBase64: string,
+    client: unknown,
+    isAuthenticated: boolean,
+    settings?: AppSettings,
+    customPrompt?: string,
+  ) => Promise<AutoEnhanceResult | null>;
+  setOriginalImage: (file: File) => void;
+  isCameraCapture: boolean;
 }
 
 export interface UseChatReturn {
@@ -53,6 +65,8 @@ export interface UseChatReturn {
   notifyGenerationError: (transformationName: string, errorMessage: string) => void;
   notifyGenerationComplete: (transformation: { name: string; prompt: string }, resultUrl: string) => Promise<void>;
   populateCategory: (categoryName: string) => Promise<void>;
+  analyzePhoto: (imageUrl: string) => Promise<void>;
+  startGreeting: () => Promise<void>;
   initWithPhoto: (imageUrl: string) => Promise<void>;
   restoreSession: (data: {
     messages: ChatMessage[];
@@ -73,6 +87,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     isAuthenticated,
     demoGenerationsRemaining,
     generateFromPrompt,
+    settings,
+    enhancePhoto,
+    setOriginalImage,
+    isCameraCapture,
   } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -519,19 +537,46 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }
   }, [isAutoPilot, buildToolContext, sogniClient, enqueueToken, flushTokenQueue, deferUntilDrained, drainPendingAnalysis, drainPendingPopulateCategory, handleTransformationResult]);
 
-  const initWithPhoto = useCallback(async (imageUrl: string) => {
-    // Run photo analysis
+  // Phase 1: Run VLM analysis and open chat (no greeting yet)
+  const analyzePhoto = useCallback(async (imageUrl: string) => {
     const analysis = await analyzePhotoSubject(imageUrl, sogniClient);
     photoAnalysisRef.current = analysis;
     setPhotoAnalysis(analysis);
-
-    // Open chat and trigger AI greeting
     setIsChatOpen(true);
+  }, [sogniClient]);
 
-    // Send empty init message to trigger greeting
+  // Phase 2: Run auto-enhance (if camera photo) then stream AI greeting
+  const startGreeting = useCallback(async () => {
+    // Auto-enhance camera photos before greeting
+    const shouldEnhance = settings.autoEnhanceWebcam && isCameraCapture && originalImageBase64;
+    if (shouldEnhance) {
+      setMessages([{
+        id: `msg-${Date.now()}-enhance`,
+        role: 'assistant',
+        content: "Let me clean up the lighting on your photo real quick...",
+        timestamp: Date.now(),
+        isStreaming: false,
+      }]);
+
+      try {
+        const prompt = buildAutoEnhancePrompt(photoAnalysisRef.current);
+        const result = await enhancePhoto(originalImageBase64, sogniClient, isAuthenticated, settings, prompt);
+        if (result) {
+          const enhancedResponse = await fetch(result.imageUrl);
+          const enhancedBlob = await enhancedResponse.blob();
+          const enhancedFile = new File([enhancedBlob], 'enhanced-capture.jpg', { type: 'image/jpeg' });
+          setOriginalImage(enhancedFile);
+        }
+      } catch {
+        // Graceful fallback: original image stays as-is
+      }
+    }
+
     setIsStreaming(true);
     const assistantPlaceholderId = `msg-${Date.now()}-greeting`;
-    setMessages([{
+    const preGreetingMessages = messagesRef.current;
+
+    setMessages((prev) => [...prev, {
       id: assistantPlaceholderId,
       role: 'assistant',
       content: '',
@@ -545,7 +590,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       await sendChatMessage(
         'I just sat down. What do you think?',
         [],
-        analysis,
+        photoAnalysisRef.current,
         toolContext,
         {
           onToken: (token) => {
@@ -563,20 +608,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               // Keep only the first assistant message (greeting) — strip the post-tool
               // commentary about categories so the chat stays clean until the user picks a chip.
               let foundGreeting = false;
-              setMessages(
-                finalHistory
-                  .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
-                  .filter((m) => m.role !== 'tool')
-                  .filter((m) => {
-                    if (m.role === 'assistant') {
-                      if (!foundGreeting) { foundGreeting = true; return true; }
-                      return false; // drop post-tool assistant messages
-                    }
-                    return true;
-                  })
-                  .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
-                  .map((m) => ({ ...m, isStreaming: false, toolCalls: undefined })),
-              );
+              const greetingMessages = finalHistory
+                .filter((m) => !(m.role === 'user' && m.content === 'I just sat down. What do you think?'))
+                .filter((m) => m.role !== 'tool')
+                .filter((m) => {
+                  if (m.role === 'assistant') {
+                    if (!foundGreeting) { foundGreeting = true; return true; }
+                    return false; // drop post-tool assistant messages
+                  }
+                  return true;
+                })
+                .filter((m) => !(m.role === 'assistant' && m.content.trim() === '' && !m.toolCalls?.length))
+                .map((m) => ({ ...m, isStreaming: false, toolCalls: undefined }));
+
+              setMessages([...preGreetingMessages, ...greetingMessages]);
               if (!isChatOpenRef.current) setUnreadCount((prev) => prev + 1);
               setIsStreaming(false);
               // Don't auto-populate during init — let the user interact with
@@ -586,7 +631,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             });
           },
           onError: () => {
-            setMessages([{
+            setMessages([...preGreetingMessages, {
               id: assistantPlaceholderId,
               role: 'assistant',
               content: 'Hey there! Ready for a makeover? Tell me what kind of look you\'re going for!',
@@ -600,13 +645,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         isMobile
       );
     } catch {
-      setMessages([{
-        id: assistantPlaceholderId,
-        role: 'assistant',
-        content: 'Hey there! Ready for a makeover? Tell me what kind of look you\'re going for!',
-        timestamp: Date.now(),
-        isStreaming: false,
-      }]);
+      setMessages((prev) => prev.map((m) =>
+        m.id === assistantPlaceholderId
+          ? { ...m, content: 'Hey there! Ready for a makeover? Tell me what kind of look you\'re going for!', isStreaming: false }
+          : m
+      ));
     } finally {
       if (!pendingCompletionRef.current) {
         setIsStreaming(false);
@@ -614,6 +657,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
     }
   }, [sogniClient, buildToolContext, enqueueToken, flushTokenQueue, deferUntilDrained, handleTransformationResult]);
+
+  // Convenience: run all phases sequentially (used when no auto-enhance is needed externally)
+  const initWithPhoto = useCallback(async (imageUrl: string) => {
+    await analyzePhoto(imageUrl);
+    await startGreeting();
+  }, [analyzePhoto, startGreeting]);
 
   const restoreSession = useCallback(async (data: {
     messages: ChatMessage[];
@@ -1419,6 +1468,8 @@ Give me your take on how it turned out, then pick what to layer on next. Choose 
     notifyGenerationError,
     notifyGenerationComplete,
     populateCategory,
+    analyzePhoto,
+    startGreeting,
     initWithPhoto,
     restoreSession,
   };

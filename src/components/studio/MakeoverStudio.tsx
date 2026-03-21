@@ -14,11 +14,11 @@ import { useWallet } from '@/hooks/useWallet';
 import { useThumbnails } from '@/hooks/useThumbnails';
 import { formatTokenAmount, getTokenLabel } from '@/services/walletService';
 import { saveSession } from '@/utils/makeoverSessionDb';
-import { buildAutoEnhancePrompt } from '@/constants/settings';
 import '@/styles/studio.css';
 
 function MakeoverStudio() {
   const {
+    originalImage,
     originalImageUrl,
     originalImageBase64,
     setOriginalImage,
@@ -77,6 +77,10 @@ function MakeoverStudio() {
     isAuthenticated: authState.isAuthenticated,
     demoGenerationsRemaining,
     generateFromPrompt,
+    settings,
+    enhancePhoto,
+    setOriginalImage,
+    isCameraCapture: originalImage?.name === 'camera-capture.jpg',
   });
 
   // Use generated categories from chat
@@ -135,7 +139,7 @@ function MakeoverStudio() {
     return () => { saveSessionRef.current = null; };
   }, [originalImageBase64]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Trigger photo analysis + AI greeting when studio mounts with a photo
+  // Trigger VLM photo analysis when studio mounts with a photo
   const initTriggered = useRef(false);
   useEffect(() => {
     if (originalImageUrl && !initTriggered.current) {
@@ -143,7 +147,7 @@ function MakeoverStudio() {
       if (isResumedSession) {
         return;
       }
-      chat.initWithPhoto(originalImageUrl);
+      chat.analyzePhoto(originalImageUrl);
     }
   }, [originalImageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -160,26 +164,12 @@ function MakeoverStudio() {
     }
   }, [isResumedSession, pendingResumeData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-enhance after VLM photo analysis completes (new sessions only)
-  const enhanceTriggered = useRef(false);
+  // After VLM analysis: start greeting (which handles auto-enhance internally)
+  const greetingTriggered = useRef(false);
   useEffect(() => {
-    if (!chat.photoAnalysis || enhanceTriggered.current || isResumedSession) return;
-    if (!settings.autoEnhanceWebcam || !originalImageBase64) return;
-    enhanceTriggered.current = true;
-
-    const prompt = buildAutoEnhancePrompt(chat.photoAnalysis);
-    enhancePhoto(originalImageBase64, sogniClient, authState.isAuthenticated, settings, prompt).then(async (result) => {
-      if (!result) return;
-      if (isGeneratingRef.current) return;
-      try {
-        const enhancedResponse = await fetch(result.imageUrl);
-        const enhancedBlob = await enhancedResponse.blob();
-        const enhancedFile = new File([enhancedBlob], 'enhanced-capture.jpg', { type: 'image/jpeg' });
-        setOriginalImage(enhancedFile);
-      } catch {
-        // Graceful fallback: original image is already set
-      }
-    });
+    if (!chat.photoAnalysis || greetingTriggered.current || isResumedSession) return;
+    greetingTriggered.current = true;
+    chat.startGreeting();
   }, [chat.photoAnalysis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selected category when categories arrive (only auto-select in auto-pilot mode)

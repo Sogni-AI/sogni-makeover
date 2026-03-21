@@ -69,37 +69,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export const AUTO_ENHANCE_CONFIG = {
   negativePrompt:
     'deformed, distorted, bad quality, blurry, ugly, disfigured, changed identity, cartoon, illustration, warped features, blurry',
+  guidance: 1,
 };
 
 /**
- * Build a personalized auto-enhance prompt from VLM photo analysis.
- * Anchors the prompt to the subject's specific features so the model
- * knows exactly what to preserve.
+ * Build a minimal auto-enhance prompt. Avoids describing the subject
+ * so the model preserves the original pixels rather than rebuilding
+ * the face from a text description.
  */
-export function buildAutoEnhancePrompt(analysis: PhotoAnalysis): string {
-  const { subjectDescription, features, estimatedAgeRange } = analysis;
-
-  // Build a rich subject description
-  const agePart = estimatedAgeRange ? `, approximately ${estimatedAgeRange} years old` : '';
-  const subject = subjectDescription || 'the person';
-
-  // Collect specific features to anchor preservation
-  const preserveDetails: string[] = [];
-  if (features.skinTone) preserveDetails.push(`${features.skinTone} skin tone`);
-  if (features.hairColor) preserveDetails.push(`${features.hairColor} hair color`);
-  if (features.hairStyle) preserveDetails.push(`${features.hairStyle} hair style`);
-  if (features.hairLength) preserveDetails.push(`${features.hairLength} hair length`);
-  if (features.facialHair) preserveDetails.push(`${features.facialHair} facial hair`);
-  if (features.glasses) preserveDetails.push('glasses');
-  if (features.distinctiveFeatures?.length) {
-    preserveDetails.push(...features.distinctiveFeatures);
-  }
-
-  const featureList = preserveDetails.length > 0
-    ? `, specifically their ${preserveDetails.join(', ')}`
-    : '';
-
-  return `Gently retouch and reframe this photo of ${subject}${agePart} as a shoulder-up portrait with neutral studio lighting and a clean background. Keep all skin texture, pores, blemishes, and imperfections exactly as they are. Do not smooth or beautify the skin. Do not refine or alter the hair. Preserve all facial features and exact likeness to the original image${featureList}. Maintain precise face shape, jawline contour, chin shape, cheekbone prominence, and forehead proportions. Keep exact nose shape including bridge width, nostril shape, and tip. Preserve exact lip shape, fullness, cupid's bow, and mouth width. Maintain exact eye shape, size, spacing, and color. Keep all natural facial asymmetry intact. Preserve every mole, freckle, birthmark, scar, dimple, and beauty mark in their exact positions. Only gently correct the lighting, exposure, and white balance.`;
+export function buildAutoEnhancePrompt(_analysis: PhotoAnalysis): string {
+  return 'Crop and reframe this photo as a tight head-and-shoulders portrait. Improve the lighting, exposure, sharpness, and overall image quality. Remove any aliasing, noise, or compression artifacts. Blur the background with shallow depth of field like a 35mm camera at f/1.2. Do not change the person at all.';
 }
 
 export const GENERATION_DEFAULTS = {
