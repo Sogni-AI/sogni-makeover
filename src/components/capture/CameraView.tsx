@@ -12,10 +12,6 @@ function CameraView() {
     setCurrentView,
     settings,
     updateSetting,
-    enhancePhoto,
-    sogniClient,
-    authState,
-    isGenerating,
   } = useApp();
   const { addToast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -203,28 +199,7 @@ function CameraView() {
 
     setOriginalImage(file);
     setCurrentView('studio');
-
-    // Auto-enhance: run in background after navigating to studio
-    if (settings.autoEnhanceWebcam) {
-      // Extract raw base64 from the data URL
-      const base64 = capturedImage.includes(',') ? capturedImage.split(',')[1] : capturedImage;
-
-      enhancePhoto(base64, sogniClient, authState.isAuthenticated, settings).then(async (result) => {
-        if (!result) return;
-        // Guard: don't replace if user already started a makeover
-        if (isGenerating) return;
-
-        try {
-          const enhancedResponse = await fetch(result.imageUrl);
-          const enhancedBlob = await enhancedResponse.blob();
-          const enhancedFile = new File([enhancedBlob], 'enhanced-capture.jpg', { type: 'image/jpeg' });
-          setOriginalImage(enhancedFile);
-        } catch {
-          // Graceful fallback: original image is already set
-        }
-      });
-    }
-  }, [capturedImage, settings.autoEnhanceWebcam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [capturedImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flipCamera = useCallback(() => {
     setFacingMode(prev => (prev === 'user' ? 'environment' : 'user'));

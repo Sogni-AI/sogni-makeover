@@ -14,12 +14,14 @@ import { useWallet } from '@/hooks/useWallet';
 import { useThumbnails } from '@/hooks/useThumbnails';
 import { formatTokenAmount, getTokenLabel } from '@/services/walletService';
 import { saveSession } from '@/utils/makeoverSessionDb';
+import { buildAutoEnhancePrompt } from '@/constants/settings';
 import '@/styles/studio.css';
 
 function MakeoverStudio() {
   const {
     originalImageUrl,
     originalImageBase64,
+    setOriginalImage,
     setCurrentView,
     resetPhoto,
     isGenerating,
@@ -32,11 +34,13 @@ function MakeoverStudio() {
     authState,
     demoGenerationsRemaining,
     history,
+    enhancePhoto,
     enhanceProgress,
     isEnhancing,
     cancelEnhancement,
     editStack,
     sogniClient,
+    settings,
     isResumedSession,
     saveSessionRef,
     pendingResumeData,
@@ -155,6 +159,28 @@ function MakeoverStudio() {
       clearPendingResumeData();
     }
   }, [isResumedSession, pendingResumeData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-enhance after VLM photo analysis completes (new sessions only)
+  const enhanceTriggered = useRef(false);
+  useEffect(() => {
+    if (!chat.photoAnalysis || enhanceTriggered.current || isResumedSession) return;
+    if (!settings.autoEnhanceWebcam || !originalImageBase64) return;
+    enhanceTriggered.current = true;
+
+    const prompt = buildAutoEnhancePrompt(chat.photoAnalysis);
+    enhancePhoto(originalImageBase64, sogniClient, authState.isAuthenticated, settings, prompt).then(async (result) => {
+      if (!result) return;
+      if (isGeneratingRef.current) return;
+      try {
+        const enhancedResponse = await fetch(result.imageUrl);
+        const enhancedBlob = await enhancedResponse.blob();
+        const enhancedFile = new File([enhancedBlob], 'enhanced-capture.jpg', { type: 'image/jpeg' });
+        setOriginalImage(enhancedFile);
+      } catch {
+        // Graceful fallback: original image is already set
+      }
+    });
+  }, [chat.photoAnalysis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selected category when categories arrive (only auto-select in auto-pilot mode)
   useEffect(() => {
@@ -316,7 +342,7 @@ function MakeoverStudio() {
             {/* Transformation picker */}
             <div className="flex min-h-0 flex-col overflow-hidden border-t border-primary-400/[0.06]">
               {/* Toolbar */}
-              <div className="flex flex-shrink-0 items-center justify-between border-b border-primary-400/[0.06] px-3 py-1.5">
+              <div className="flex flex-shrink-0 items-center justify-between border-b border-primary-400/[0.06] px-3 py-1.5 md:pr-[180px]">
                 {/* Left: navigation and mode controls */}
                 <div className="flex items-center gap-2">
                   <button

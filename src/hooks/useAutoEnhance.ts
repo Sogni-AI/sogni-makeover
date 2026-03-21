@@ -47,6 +47,7 @@ export function useAutoEnhance(): UseAutoEnhanceReturn {
       client: unknown,
       isAuthenticated: boolean,
       settings?: AppSettings,
+      customPrompt?: string,
     ): Promise<AutoEnhanceResult | null> => {
       const abortController = new AbortController();
       abortRef.current = abortController;
@@ -57,7 +58,7 @@ export function useAutoEnhance(): UseAutoEnhanceReturn {
 
       const params: GenerationParams = {
         modelId,
-        positivePrompt: AUTO_ENHANCE_CONFIG.prompt,
+        positivePrompt: customPrompt ?? '',
         negativePrompt: AUTO_ENHANCE_CONFIG.negativePrompt,
         contextImages: [imageBase64],
         width: DEFAULT_SETTINGS.defaultWidth,
@@ -68,7 +69,7 @@ export function useAutoEnhance(): UseAutoEnhanceReturn {
         scheduler: modelDefaults.scheduler,
         outputFormat: DEFAULT_SETTINGS.outputFormat,
         numberOfMedia: GENERATION_DEFAULTS.numberOfMedia,
-        denoisingStrength: AUTO_ENHANCE_CONFIG.denoisingStrength,
+
         tokenType: isAuthenticated ? getPaymentMethod() : undefined,
       };
 
