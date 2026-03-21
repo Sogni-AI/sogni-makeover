@@ -21,6 +21,7 @@ function buildGenerationPrompt(
       : '- If the client appears male, include a Facial Hair category. If female, skip it.';
 
   const baseRules = `Rules:
+- REALISM FIRST: All options should be professional, realistic makeover transformations — the kind a real salon, stylist, or makeover show would offer. Think real hair colors, real makeup techniques, real fashion. Avoid fantastical, costume-like, or sci-fi options (e.g. no "galaxy hair", "fairy wings", "cyberpunk visor", "alien glow") UNLESS the client explicitly asks for creative, fantasy, or out-there looks.
 - You MUST generate at least 6 categories with at least 6 transformation options each. More is better — aim for 8+ categories when the client's request allows it.
 - NEVER return fewer than 4 categories. A single "Quick Looks" category with 2 options is unacceptable.
 - Good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
@@ -135,7 +136,7 @@ export async function generateTransformations(
       // Authenticated: direct SDK
       const rawClient = sogniClient.getChatClient();
       const messages = [
-        { role: 'system' as const, content: 'You are an eccentric legendary Hollywood stylist. Generate transformation options in JSON format exactly as requested.' },
+        { role: 'system' as const, content: 'You are a professional Hollywood stylist. Generate realistic, salon-quality transformation options in JSON format exactly as requested. Keep suggestions grounded and professional unless the client explicitly asks for fantasy or creative looks.' },
         { role: 'user' as const, content: prompt },
       ];
 
@@ -164,7 +165,7 @@ export async function generateTransformations(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [
-            { role: 'system', content: 'You are an eccentric legendary Hollywood stylist. Generate transformation options in JSON format exactly as requested.' },
+            { role: 'system', content: 'You are a professional Hollywood stylist. Generate realistic, salon-quality transformation options in JSON format exactly as requested. Keep suggestions grounded and professional unless the client explicitly asks for fantasy or creative looks.' },
             { role: 'user', content: prompt },
           ],
           max_tokens: 15000,
@@ -384,6 +385,7 @@ Return ONLY category shells — no transformation options. Return JSON:
 }
 
 Rules:
+- REALISM FIRST: Categories should reflect professional, realistic makeover options — the kind a real salon or stylist would offer. Avoid fantastical or costume-like categories (e.g. no "Fairy Tale Looks", "Sci-Fi Vibes", "Mythical Creatures") UNLESS the client explicitly asks for creative or fantasy options.
 - Generate up to 8 categories. Aim for 6-8 when the client's request allows it.
 - NEVER return fewer than 4 categories.
 - Good category examples: Hair Color, Hairstyle, Makeup Looks, Vibes & Aesthetic, Skin & Glow, Outfit & Style, Accessories, Eye Color, Facial Hair
@@ -440,7 +442,7 @@ export async function generateCategoryShells(
       // Authenticated: direct SDK
       const rawClient = sogniClient.getChatClient();
       const messages = [
-        { role: 'system' as const, content: 'You are an eccentric legendary Hollywood stylist. Generate category names in JSON format exactly as requested.' },
+        { role: 'system' as const, content: 'You are a professional Hollywood stylist. Generate realistic, salon-quality category names in JSON format exactly as requested. Keep suggestions grounded and professional unless the client explicitly asks for fantasy or creative looks.' },
         { role: 'user' as const, content: prompt },
       ];
 
@@ -469,7 +471,7 @@ export async function generateCategoryShells(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [
-            { role: 'system', content: 'You are an eccentric legendary Hollywood stylist. Generate category names in JSON format exactly as requested.' },
+            { role: 'system', content: 'You are a professional Hollywood stylist. Generate realistic, salon-quality category names in JSON format exactly as requested. Keep suggestions grounded and professional unless the client explicitly asks for fantasy or creative looks.' },
             { role: 'user', content: prompt },
           ],
           max_tokens: 2000,
@@ -575,6 +577,7 @@ Return JSON:
 }
 
 Rules:
+- REALISM FIRST: All options should be professional, realistic transformations — things a real stylist, salon, or makeover artist would actually do. Stay grounded: real hair colors, real makeup techniques, real fashion and accessories. Avoid fantastical, costume-like, or sci-fi options UNLESS the client explicitly asked for creative or fantasy looks.
 - Generate exactly 12 transformation options for the "${categoryName}" category
 - Write prompts with the actual subject description baked in (not generic "the person"): use "${photoAnalysis.subjectDescription || 'the person'}" as the subject
 - Set intensity (denoising strength) appropriate to how dramatic the change is: subtle 0.5-0.6, moderate 0.6-0.75, dramatic 0.75-0.95
@@ -630,7 +633,7 @@ export async function generateCategoryOptions(
       // Authenticated: direct SDK
       const rawClient = sogniClient.getChatClient();
       const messages = [
-        { role: 'system' as const, content: 'You are an eccentric legendary Hollywood stylist. Generate transformation options in JSON format exactly as requested.' },
+        { role: 'system' as const, content: 'You are a professional Hollywood stylist. Generate realistic, salon-quality transformation options in JSON format exactly as requested. Keep suggestions grounded and professional unless the client explicitly asks for fantasy or creative looks.' },
         { role: 'user' as const, content: prompt },
       ];
 
@@ -659,7 +662,7 @@ export async function generateCategoryOptions(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [
-            { role: 'system', content: 'You are an eccentric legendary Hollywood stylist. Generate transformation options in JSON format exactly as requested.' },
+            { role: 'system', content: 'You are a professional Hollywood stylist. Generate realistic, salon-quality transformation options in JSON format exactly as requested. Keep suggestions grounded and professional unless the client explicitly asks for fantasy or creative looks.' },
             { role: 'user', content: prompt },
           ],
           max_tokens: 4000,
